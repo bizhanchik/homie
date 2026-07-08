@@ -183,7 +183,7 @@ export function useHomieAgent(opts?: {
   // Debug-only (harness): when true, the replan API path is short-circuited to a
   // failure so the pure-A* local fallback is exercised. Never toggled in prod.
   const debugFailReplanRef = useRef<boolean>(false);
-  const labelEndpointRef = useRef<string>('/api/label');
+  const labelEndpointRef = useRef<string>('/api/label-combined');
   const onNarrationRef = useRef(opts?.onNarration);
   onNarrationRef.current = opts?.onNarration;
 
