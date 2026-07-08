@@ -12,6 +12,7 @@ import PlanPanel from '@/components/PlanPanel';
 import TaskBar from '@/components/TaskBar';
 import OrderModal from '@/components/OrderModal';
 import VoiceButton from '@/components/VoiceButton';
+import HistoryPanel from '@/components/HistoryPanel';
 import { useHomieAgent } from '@/sim/use-homie-agent';
 import type { AgentState } from '@/lib/types';
 import {
@@ -478,9 +479,14 @@ export default function StudioPage({
           style={{ borderLeft: '1px solid var(--color-hairline)', background: 'var(--color-canvas)' }}
         >
           <LabelsPanel scene={agent.scene} />
-          <div className="min-h-0 flex-1">
+          <div className="min-h-0 flex-1 overflow-y-auto">
             <PlanPanel plan={agent.plan} currentStepIndex={agent.currentStepIndex} />
           </div>
+          <HistoryPanel
+            history={agent.history}
+            isReplaying={agent.isReplaying}
+            onReplay={(rec) => agentRef.current.replayRun(rec)}
+          />
         </aside>
       </div>
 

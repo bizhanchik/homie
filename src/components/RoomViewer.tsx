@@ -38,6 +38,8 @@ export type RoomViewerHandle = {
   getFloorY(): number;
   setRobotPose(pose: { position: Vec2; headingRad: number }): void; // capsule robot, y = floorY
   setPath(points: Vec2[]): void; // emerald polyline slightly above floor; [] clears
+  setTrail(points: Vec2[]): void; // muted ghost trail showing where robot has been
+  clearTrail(): void;
   addObstacle(at: Vec2): string; // red 0.4m box, returns id
   removeObstacle(id: string): void; // remove one obstacle box by id
   getObstacles(): { id: string; at: Vec2 }[];
@@ -116,6 +118,7 @@ type ViewerState = {
   robotSpeed: number; // m/s, estimated from setRobotPose deltas
   obstaclesGroup: THREE.Group;
   pathGroup: THREE.Group;
+  trailGroup: THREE.Group;
   floorY: number;
   bounds: Bounds;
   labels: { position: Vec2; el: HTMLDivElement }[];
@@ -302,6 +305,10 @@ const RoomViewer = forwardRef<RoomViewerHandle, RoomViewerProps>(function RoomVi
     pathGroup.name = 'path';
     scene.add(pathGroup);
 
+    const trailGroup = new THREE.Group();
+    trailGroup.name = 'trail';
+    scene.add(trailGroup);
+
     const state: ViewerState = {
       renderer,
       scene,
@@ -318,6 +325,7 @@ const RoomViewer = forwardRef<RoomViewerHandle, RoomViewerProps>(function RoomVi
       robotSpeed: 0,
       obstaclesGroup,
       pathGroup,
+      trailGroup,
       floorY: 0,
       bounds: { minX: -1, maxX: 1, minZ: -1, maxZ: 1 },
       labels: [],
@@ -440,6 +448,7 @@ const RoomViewer = forwardRef<RoomViewerHandle, RoomViewerProps>(function RoomVi
       disposeObject(robotGroup);
       disposeObject(obstaclesGroup);
       disposeObject(pathGroup);
+      disposeObject(trailGroup);
       renderer.dispose();
       renderer.domElement.remove();
       stateRef.current = null;
@@ -649,6 +658,35 @@ const RoomViewer = forwardRef<RoomViewerHandle, RoomViewerProps>(function RoomVi
           const dot = new THREE.Mesh(dotGeo, dotMat);
           dot.position.set(p.x, y, p.z);
           S.pathGroup.add(dot);
+        }
+      },
+
+      setTrail(points) {
+        const S = stateRef.current;
+        if (!S) return;
+        for (let i = S.trailGroup.children.length - 1; i >= 0; i--) {
+          const child = S.trailGroup.children[i];
+          S.trailGroup.remove(child);
+          disposeObject(child);
+        }
+        if (points.length < 2) return;
+        const y = S.floorY + 0.01;
+        const verts = points.map((p) => new THREE.Vector3(p.x, y, p.z));
+        const geo = new THREE.BufferGeometry().setFromPoints(verts);
+        const line = new THREE.Line(
+          geo,
+          new THREE.LineBasicMaterial({ color: 0xa09c92, transparent: true, opacity: 0.55 }),
+        );
+        S.trailGroup.add(line);
+      },
+
+      clearTrail() {
+        const S = stateRef.current;
+        if (!S) return;
+        for (let i = S.trailGroup.children.length - 1; i >= 0; i--) {
+          const child = S.trailGroup.children[i];
+          S.trailGroup.remove(child);
+          disposeObject(child);
         }
       },
 

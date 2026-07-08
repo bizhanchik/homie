@@ -17,6 +17,7 @@ import type {
   NarrationEvent,
   Plan,
   PlanStep,
+  RunRecord,
   SceneModel,
   Vec2,
   ApiResult,
@@ -32,9 +33,12 @@ export type AgentAPI = {
   currentStepIndex: number; // -1 when none
   narration: NarrationEvent[]; // append-only
   error: string | null;
+  history: RunRecord[];
+  isReplaying: boolean;
   attachViewer(h: RoomViewerHandle): void;
   loadRoom(glb: ArrayBuffer): Promise<void>;
   runTask(task: string): Promise<void>;
+  replayRun(record: RunRecord): void;
   addObstacle(at: Vec2, viewerAssignedId?: string): string; // returns obstacle id
   removeObstacle(id: string): void;
   reset(): void;
@@ -53,6 +57,8 @@ type AgentReducerState = {
   currentStepIndex: number;
   narration: NarrationEvent[];
   error: string | null;
+  history: RunRecord[];
+  isReplaying: boolean;
 };
 
 type Action =
@@ -62,6 +68,8 @@ type Action =
   | { type: 'setStep'; index: number }
   | { type: 'narrate'; event: NarrationEvent }
   | { type: 'error'; error: string }
+  | { type: 'addHistory'; record: RunRecord }
+  | { type: 'setReplaying'; isReplaying: boolean }
   | { type: 'reset' };
 
 const initialState: AgentReducerState = {
@@ -71,6 +79,8 @@ const initialState: AgentReducerState = {
   currentStepIndex: -1,
   narration: [],
   error: null,
+  history: [],
+  isReplaying: false,
 };
 
 function reducer(s: AgentReducerState, a: Action): AgentReducerState {
@@ -87,6 +97,10 @@ function reducer(s: AgentReducerState, a: Action): AgentReducerState {
       return { ...s, narration: [...s.narration, a.event] };
     case 'error':
       return { ...s, state: 'error', error: a.error };
+    case 'addHistory':
+      return { ...s, history: [a.record, ...s.history].slice(0, 20) };
+    case 'setReplaying':
+      return { ...s, isReplaying: a.isReplaying };
     case 'reset':
       return {
         ...s,
@@ -154,6 +168,11 @@ export function useHomieAgent(opts?: {
   // Track manually-placed obstacle positions keyed by viewer id so we can
   // rebuild the grid when one is removed.
   const manualObstaclesRef = useRef<Map<string, Vec2>>(new Map());
+
+  // Live trail: positions sampled every ~100ms while the robot is moving.
+  // Stored in a ref (not state) because it updates every frame.
+  const currentTrailRef = useRef<Vec2[]>([]);
+  const lastTrailUpdateRef = useRef<number>(0);
   const taskRef = useRef<string>('');
   const cancelledRef = useRef<boolean>(false);
   // Monotonic run token: a fresh runTask (or reset) bumps this so any older
@@ -355,7 +374,22 @@ export function useHomieAgent(opts?: {
         return true;
       };
 
-      return driver.drive(path, { speed: 0.8, validate });
+      return driver.drive(path, {
+        speed: 0.8,
+        validate,
+        onProgress: (pos) => {
+          const now = performance.now();
+          if (now - lastTrailUpdateRef.current > 80) {
+            currentTrailRef.current.push({ ...pos });
+            lastTrailUpdateRef.current = now;
+            // Throttle viewer updates to every 5 new points to avoid rebuilding
+            // geometry on every frame.
+            if (currentTrailRef.current.length % 5 === 0) {
+              viewerRef.current?.setTrail(currentTrailRef.current);
+            }
+          }
+        },
+      });
     },
     [],
   );
@@ -564,6 +598,10 @@ export function useHomieAgent(opts?: {
         cancelledRef.current || runIdRef.current !== myRun;
 
       taskRef.current = task;
+      // Reset the live trail for this new run.
+      currentTrailRef.current = [];
+      lastTrailUpdateRef.current = 0;
+      viewerRef.current?.clearTrail();
       dispatch({ type: 'setState', state: 'planning' });
 
       const scene = sceneRef.current ?? minimalScene(boundsRef.current);
@@ -593,10 +631,48 @@ export function useHomieAgent(opts?: {
       if (cancelled()) return;
       dispatch({ type: 'setPlan', plan });
       dispatch({ type: 'setState', state: 'executing' });
+
+      const runStartedAt = Date.now();
       await runPlan(plan.steps, task, cancelled);
+
+      // Save the completed run to history regardless of outcome.
+      if (currentTrailRef.current.length > 1) {
+        viewerRef.current?.setTrail(currentTrailRef.current);
+        const record: RunRecord = {
+          id: `run-${runStartedAt}`,
+          task,
+          startedAt: runStartedAt,
+          positions: [...currentTrailRef.current],
+          outcome: cancelled() ? 'cancelled' : 'done',
+        };
+        dispatch({ type: 'addHistory', record });
+      }
     },
     [runPlan],
   );
+
+  // --- replayRun -----------------------------------------------------------
+  const replayRun = useCallback((record: RunRecord) => {
+    if (!driverRef.current || !viewerRef.current) return;
+    // Cancel any active task first.
+    cancelledRef.current = true;
+    runIdRef.current++;
+    driverRef.current.cancel();
+    viewerRef.current.setPath([]);
+
+    dispatch({ type: 'setReplaying', isReplaying: true });
+
+    // Show the full historical trail immediately.
+    viewerRef.current.setTrail(record.positions);
+
+    // Drive the robot through the recorded positions at 3x speed.
+    const pts = record.positions;
+    driverRef.current.drive(pts, { speed: 2.4 }).then(() => {
+      dispatch({ type: 'setReplaying', isReplaying: false });
+    }).catch(() => {
+      dispatch({ type: 'setReplaying', isReplaying: false });
+    });
+  }, []);
 
   // --- addObstacle ---------------------------------------------------------
   // Called by the viewer's onObstacleAdded callback: the viewer already drew
@@ -680,9 +756,12 @@ export function useHomieAgent(opts?: {
     currentStepIndex: rs.currentStepIndex,
     narration: rs.narration,
     error: rs.error,
+    history: rs.history,
+    isReplaying: rs.isReplaying,
     attachViewer,
     loadRoom,
     runTask,
+    replayRun,
     addObstacle,
     removeObstacle,
     reset,

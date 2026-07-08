@@ -52,6 +52,14 @@ export type ApiResult<T> = { ok: true; data: T } | { ok: false; error: string };
 
 export type NarrationEvent = { at: number; text: string }; // at = ms timestamp
 
+export type RunRecord = {
+  id: string;
+  task: string;
+  startedAt: number; // Date.now()
+  positions: Vec2[];  // sampled robot positions throughout the run
+  outcome: 'done' | 'cancelled';
+};
+
 // --- API payloads -----------------------------------------------------------
 
 // POST /api/label  ->  ApiResult<SceneModel>
