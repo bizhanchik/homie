@@ -99,7 +99,7 @@ export default function StudioPage({
 
   const loadSample = useCallback(async () => {
     try {
-      const res = await fetch('/test-room.glb');
+      const res = await fetch('/demo.glb');
       if (!res.ok) throw new Error(`Could not fetch sample room (${res.status})`);
       const buf = await res.arrayBuffer();
       await doLoadRoom(buf);
