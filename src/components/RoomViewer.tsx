@@ -39,6 +39,7 @@ export type RoomViewerHandle = {
   setRobotPose(pose: { position: Vec2; headingRad: number }): void; // capsule robot, y = floorY
   setPath(points: Vec2[]): void; // emerald polyline slightly above floor; [] clears
   addObstacle(at: Vec2): string; // red 0.4m box, returns id
+  removeObstacle(id: string): void; // remove one obstacle box by id
   getObstacles(): { id: string; at: Vec2 }[];
   clearObstacles(): void; // remove all obstacle meshes + internal list (keeps room/robot/path)
   setLabels(objects: SceneObject[]): void; // floating label pins at object positions
@@ -49,8 +50,10 @@ export type RoomViewerHandle = {
 export type RoomViewerProps = {
   onReady?: () => void;
   onFloorClick?: (at: Vec2) => void; // raycast click -> world XZ on floor
-  obstacleMode?: boolean; // when true, floor clicks also auto-add an obstacle and fire onObstacleAdded
+  obstacleMode?: boolean; // when true, floor clicks add an obstacle and fire onObstacleAdded
+  obstacleRemoveMode?: boolean; // when true, clicking a red box removes it
   onObstacleAdded?: (at: Vec2, id: string) => void;
+  onObstacleRemoved?: (id: string) => void;
   className?: string;
 };
 
@@ -394,7 +397,25 @@ const RoomViewer = forwardRef<RoomViewerHandle, RoomViewerProps>(function RoomVi
       if (!state.raycaster.ray.intersectPlane(floorPlane, floorHit)) return;
       const at: Vec2 = { x: floorHit.x, z: floorHit.z };
       const p = propsRef.current;
-      if (p.obstacleMode) {
+      if (p.obstacleRemoveMode) {
+        // Raycast against obstacle meshes to find which one was clicked.
+        state.raycaster.setFromCamera(ndc, camera);
+        const hits = state.raycaster.intersectObjects(
+          Array.from(state.obstacles.values()).map((o) => o.mesh),
+        );
+        if (hits.length > 0) {
+          const clicked = hits[0].object as THREE.Mesh;
+          for (const [id, { mesh }] of state.obstacles) {
+            if (mesh === clicked) {
+              state.obstaclesGroup.remove(mesh);
+              disposeObject(mesh);
+              state.obstacles.delete(id);
+              p.onObstacleRemoved?.(id);
+              break;
+            }
+          }
+        }
+      } else if (p.obstacleMode) {
         const id = addObstacleInternal(state, at);
         p.onObstacleAdded?.(at, id);
       }
@@ -635,6 +656,16 @@ const RoomViewer = forwardRef<RoomViewerHandle, RoomViewerProps>(function RoomVi
         const S = stateRef.current;
         if (!S) return '';
         return addObstacleInternal(S, at);
+      },
+
+      removeObstacle(id) {
+        const S = stateRef.current;
+        if (!S) return;
+        const entry = S.obstacles.get(id);
+        if (!entry) return;
+        S.obstaclesGroup.remove(entry.mesh);
+        disposeObject(entry.mesh);
+        S.obstacles.delete(id);
       },
 
       getObstacles() {

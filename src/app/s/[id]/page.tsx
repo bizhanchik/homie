@@ -75,7 +75,7 @@ export default function StudioPage({
   const [loadingRoom, setLoadingRoom] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
-  const [obstacleMode, setObstacleMode] = useState(false);
+  const [obstacleMode, setObstacleMode] = useState<'add' | 'remove' | null>(null);
   const [orderOpen, setOrderOpen] = useState(false);
 
   // ---- Room loading -------------------------------------------------------
@@ -170,8 +170,13 @@ export default function StudioPage({
     void agentRef.current.runTask(task);
   }, []);
 
-  const onObstacleAdded = useCallback((at: { x: number; z: number }) => {
-    agentRef.current.addObstacle(at);
+  const onObstacleAdded = useCallback((at: { x: number; z: number }, id: string) => {
+    // Viewer already drew the box; pass its id so the agent only stamps the grid.
+    agentRef.current.addObstacle(at, id);
+  }, []);
+
+  const onObstacleRemoved = useCallback((id: string) => {
+    agentRef.current.removeObstacle(id);
   }, []);
 
   // ---- Voice: spoken commands -> tasks ------------------------------------
@@ -301,38 +306,60 @@ export default function StudioPage({
       {/* ---- Main: viewer + sidebar ---- */}
       <div className="flex min-h-0 flex-1">
         {/* Viewer area */}
-        <main className={`relative min-h-0 flex-1 ${obstacleMode ? 'cursor-crosshair' : ''}`}>
+        <main className={`relative min-h-0 flex-1 ${obstacleMode === 'add' ? 'cursor-crosshair' : obstacleMode === 'remove' ? 'cursor-pointer' : ''}`}>
           <RoomViewer
             ref={viewerRef}
             className="h-full w-full"
             onReady={onReady}
-            obstacleMode={obstacleMode}
+            obstacleMode={obstacleMode === 'add'}
+            obstacleRemoveMode={obstacleMode === 'remove'}
             onObstacleAdded={onObstacleAdded}
+            onObstacleRemoved={onObstacleRemoved}
           />
 
           {/* Toolbar (top-left) */}
           {roomLoaded && (
             <div className="pointer-events-none absolute left-3 top-3 flex flex-col gap-2">
+              {/* Add obstacle button */}
               <button
                 type="button"
-                onClick={() => setObstacleMode((m) => !m)}
+                onClick={() => setObstacleMode((m) => (m === 'add' ? null : 'add'))}
                 className="pointer-events-auto flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-medium backdrop-blur transition cursor-pointer"
                 style={{
-                  border: obstacleMode ? '1px solid rgba(239,68,68,0.6)' : '1px solid var(--color-hairline-strong)',
-                  background: obstacleMode ? 'rgba(239,68,68,0.08)' : 'rgba(247,247,244,0.88)',
-                  color: obstacleMode ? '#dc2626' : 'var(--color-ink)',
+                  border: obstacleMode === 'add' ? '1px solid rgba(239,68,68,0.6)' : '1px solid var(--color-hairline-strong)',
+                  background: obstacleMode === 'add' ? 'rgba(239,68,68,0.08)' : 'rgba(247,247,244,0.88)',
+                  color: obstacleMode === 'add' ? '#dc2626' : 'var(--color-ink)',
                   fontFamily: "'CursorGothic', sans-serif",
                 }}
               >
                 <span className="text-sm">⛔</span>
-                {obstacleMode ? 'Click floor to drop' : 'Drop obstacle'}
+                {obstacleMode === 'add' ? 'Click floor to place' : 'Add obstacle'}
               </button>
+
+              {/* Remove obstacle button */}
+              <button
+                type="button"
+                onClick={() => setObstacleMode((m) => (m === 'remove' ? null : 'remove'))}
+                className="pointer-events-auto flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-medium backdrop-blur transition cursor-pointer"
+                style={{
+                  border: obstacleMode === 'remove' ? '1px solid rgba(239,68,68,0.6)' : '1px solid var(--color-hairline-strong)',
+                  background: obstacleMode === 'remove' ? 'rgba(239,68,68,0.08)' : 'rgba(247,247,244,0.88)',
+                  color: obstacleMode === 'remove' ? '#dc2626' : 'var(--color-ink)',
+                  fontFamily: "'CursorGothic', sans-serif",
+                }}
+              >
+                <span className="text-sm">✕</span>
+                {obstacleMode === 'remove' ? 'Click obstacle to remove' : 'Remove obstacle'}
+              </button>
+
               {obstacleMode && (
                 <span
                   className="pointer-events-none max-w-[12rem] rounded-lg px-3 py-1.5 text-[11px] backdrop-blur"
                   style={{ background: 'rgba(247,247,244,0.88)', color: 'var(--color-muted)', fontFamily: "'CursorGothic', sans-serif" }}
                 >
-                  Click anywhere on the floor to place an obstacle in Homie&apos;s path.
+                  {obstacleMode === 'add'
+                    ? "Click anywhere on the floor to place a red block."
+                    : "Click a red block to erase it."}
                 </span>
               )}
             </div>

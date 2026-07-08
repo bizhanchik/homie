@@ -35,7 +35,8 @@ export type AgentAPI = {
   attachViewer(h: RoomViewerHandle): void;
   loadRoom(glb: ArrayBuffer): Promise<void>;
   runTask(task: string): Promise<void>;
-  addObstacle(at: Vec2): void;
+  addObstacle(at: Vec2, viewerAssignedId?: string): string; // returns obstacle id
+  removeObstacle(id: string): void;
   reset(): void;
   /**
    * Debug-only (dev harness): when on, the next replan short-circuits its API
@@ -150,6 +151,9 @@ export function useHomieAgent(opts?: {
   const sceneRef = useRef<SceneModel | null>(null);
   const boundsRef = useRef<Bounds>({ minX: -1, maxX: 1, minZ: -1, maxZ: 1 });
   const floorYRef = useRef<number>(0);
+  // Track manually-placed obstacle positions keyed by viewer id so we can
+  // rebuild the grid when one is removed.
+  const manualObstaclesRef = useRef<Map<string, Vec2>>(new Map());
   const taskRef = useRef<string>('');
   const cancelledRef = useRef<boolean>(false);
   // Monotonic run token: a fresh runTask (or reset) bumps this so any older
@@ -296,10 +300,14 @@ export function useHomieAgent(opts?: {
       const from = driver.position;
       let path: Vec2[];
       if (grid) {
-        // A generous approach radius: waypoints often target an object's own
-        // (now-obstacle-stamped) position, so the free landing spot is just
-        // outside that footprint's halo, not within a few cm of the point.
-        const target = grid.nearestFree(step.waypoint, 1.6) ?? step.waypoint;
+        // Stop as close as physically possible — try a tight 0.45 m radius
+        // first (just clears the obstacle dilation), then fall back to wider
+        // radii only if the nearest cell there is still blocked.
+        const target =
+          grid.nearestFree(step.waypoint, 0.45) ??
+          grid.nearestFree(step.waypoint, 0.8) ??
+          grid.nearestFree(step.waypoint, 1.4) ??
+          step.waypoint;
         const routed = findPath(grid, from, target);
         if (!routed) {
           // Target is walled off (e.g. an obstacle's dilation swallowed the
@@ -591,11 +599,45 @@ export function useHomieAgent(opts?: {
   );
 
   // --- addObstacle ---------------------------------------------------------
-  // The viewer already drew the red box + fired its callback; we only update the
-  // grid. If a drive is in flight, its per-tick validate() detects the newly
-  // blocked corridor and resolves 'blocked', which drives the replan flow.
-  const addObstacle = useCallback((at: Vec2) => {
+  // Called by the viewer's onObstacleAdded callback: the viewer already drew
+  // the box and gives us the id. We only update the grid + tracking map.
+  const addObstacle = useCallback((at: Vec2, viewerAssignedId?: string): string => {
+    let id = viewerAssignedId ?? '';
+    if (!id) {
+      // Programmatic call (no viewer auto-place) — ask viewer to draw the box.
+      id = viewerRef.current?.addObstacle(at) ?? String(Date.now());
+    }
     gridRef.current?.addObstacleFootprint(at, 0.4);
+    manualObstaclesRef.current.set(id, at);
+    return id;
+  }, []);
+
+  // --- removeObstacle ------------------------------------------------------
+  // Rebuild the grid from geometry so the removed obstacle's blocked cells
+  // are cleared, then re-stamp all remaining manual obstacles.
+  const removeObstacle = useCallback((id: string) => {
+    viewerRef.current?.removeObstacle(id);
+    manualObstaclesRef.current.delete(id);
+
+    const v = viewerRef.current;
+    const root = (v?.getRoomRoot() ?? null) as THREE.Object3D | null;
+    if (!v || !root) return;
+
+    const grid = buildGrid(root, boundsRef.current, floorYRef.current);
+    // Re-stamp remaining manual obstacles.
+    for (const pos of manualObstaclesRef.current.values()) {
+      grid.addObstacleFootprint(pos, 0.4);
+    }
+    // Re-stamp furniture footprints from the scene model.
+    const scene = sceneRef.current;
+    if (scene) {
+      for (const obj of scene.objects) {
+        if (obj.kind === 'furniture') {
+          grid.addObstacleFootprint(obj.position, Math.min(Math.max(obj.size.w, obj.size.d), 1.0));
+        }
+      }
+    }
+    gridRef.current = grid;
   }, []);
 
   // --- debug ---------------------------------------------------------------
@@ -642,6 +684,7 @@ export function useHomieAgent(opts?: {
     loadRoom,
     runTask,
     addObstacle,
+    removeObstacle,
     reset,
     setDebugFailReplan,
   };
