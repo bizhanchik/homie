@@ -1,15 +1,27 @@
 'use client';
 
-// Homie landing — one dark screen. Wordmark, the pitch, and a single CTA that
-// mints a fresh session id and drops you into the studio.
-
 import { useRouter } from 'next/navigation';
 import { nanoid } from 'nanoid';
 
 const STEPS = [
-  { emoji: '📱', title: 'Scan', body: 'Point your iPhone around the room. A LiDAR mesh beams up in seconds.' },
-  { emoji: '🤖', title: 'Simulate', body: 'Watch Homie navigate and run tasks inside your actual space.' },
-  { emoji: '📦', title: 'Order', body: 'Love it? Order the real robot — it ships knowing your home.' },
+  {
+    pill: 'Scan',
+    pillColor: 'bg-[#dfa88f] text-[#26251e]',
+    title: 'Point. Walk. Done.',
+    body: 'Open Scaniverse on your iPhone. Walk the room once. A LiDAR mesh beams to the browser in seconds.',
+  },
+  {
+    pill: 'Simulate',
+    pillColor: 'bg-[#c0a8dd] text-[#26251e]',
+    title: 'Watch it work.',
+    body: 'Homie reads the room — furniture, clearances, floor paths. Type a task and watch it navigate your actual space.',
+  },
+  {
+    pill: 'Order',
+    pillColor: 'bg-[#c08532] text-white',
+    title: 'Ship knowing your home.',
+    body: 'Love it? Reserve the real robot. It arrives with your map already loaded — day one, it knows your home.',
+  },
 ];
 
 export default function Home() {
@@ -20,68 +32,254 @@ export default function Home() {
   };
 
   return (
-    <main className="relative flex min-h-screen flex-col items-center justify-center gap-12 overflow-hidden bg-neutral-950 px-6 py-14 text-neutral-100">
-      {/* Ambient emerald glow — pure CSS, no assets. */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 -z-10"
-        style={{
-          background:
-            'radial-gradient(60% 45% at 50% 22%, rgba(16,185,129,0.16), transparent 70%), radial-gradient(40% 30% at 80% 90%, rgba(52,211,153,0.08), transparent 70%)',
-        }}
-      />
+    <main
+      className="min-h-screen"
+      style={{ background: 'var(--color-canvas)', color: 'var(--color-ink)' }}
+    >
+      {/* ── Nav ── */}
+      <nav
+        className="flex items-center justify-between px-8 h-16 border-b"
+        style={{ borderColor: 'var(--color-hairline)' }}
+      >
+        <span
+          className="text-base font-semibold tracking-tight"
+          style={{ fontFamily: "'CursorGothic', sans-serif", color: 'var(--color-ink)' }}
+        >
+          Homie
+        </span>
+        <div className="flex items-center gap-6">
+          <span
+            className="text-sm hidden sm:block"
+            style={{ color: 'var(--color-muted)', fontFamily: "'CursorGothic', sans-serif" }}
+          >
+            Cursor Physical AI Hackathon · Almaty 2026
+          </span>
+          <button
+            type="button"
+            onClick={openStudio}
+            className="text-sm font-medium transition-opacity hover:opacity-70 cursor-pointer"
+            style={{
+              color: 'var(--color-primary)',
+              fontFamily: "'CursorGothic', sans-serif",
+              background: 'none',
+              border: 'none',
+            }}
+          >
+            Try it →
+          </button>
+        </div>
+      </nav>
 
-      <div className="flex max-w-2xl flex-col items-center text-center">
-        <div className="mb-7 flex items-center gap-2 rounded-full border border-emerald-500/25 bg-emerald-500/5 px-4 py-1.5 text-xs font-medium text-emerald-300/90">
-          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
-          Try before you buy
+      {/* ── Hero ── */}
+      <section className="max-w-5xl mx-auto px-8 pt-24 pb-20">
+        <div className="mb-8 inline-flex items-center gap-2">
+          <span
+            className="text-xs font-semibold px-3 py-1 rounded-full"
+            style={{
+              background: 'var(--color-surface-strong)',
+              color: 'var(--color-ink)',
+              letterSpacing: '0.88px',
+              textTransform: 'uppercase',
+              fontFamily: "'CursorGothic', sans-serif",
+            }}
+          >
+            Try before you buy
+          </span>
         </div>
 
-        <h1 className="text-5xl font-bold tracking-tight text-white sm:text-7xl">
-          Homie
+        <h1
+          className="leading-none mb-6"
+          style={{
+            fontFamily: "'CursorGothic', sans-serif",
+            fontSize: 'clamp(48px, 8vw, 80px)',
+            fontWeight: 400,
+            letterSpacing: '-2px',
+            color: 'var(--color-ink)',
+            maxWidth: '820px',
+          }}
+        >
+          Try a home robot in{' '}
+          <span style={{ color: 'var(--color-primary)' }}>YOUR</span>{' '}
+          home.<br />Before you buy it.
         </h1>
 
-        <h2 className="mt-5 text-balance text-3xl font-semibold leading-[1.1] tracking-tight sm:text-[2.75rem]">
-          Try a home robot in{' '}
-          <span className="bg-gradient-to-r from-emerald-300 to-emerald-500 bg-clip-text text-transparent">
-            YOUR
-          </span>{' '}
-          home.
-          <br className="hidden sm:block" /> Before you buy it.
-        </h2>
-
-        <p className="mt-6 max-w-md text-balance text-lg leading-relaxed text-neutral-400">
-          Scan your room with your iPhone. Watch Homie work inside it. Order the
-          real thing.
+        <p
+          className="mb-10 max-w-md"
+          style={{
+            fontFamily: "'CursorGothic', sans-serif",
+            fontSize: '18px',
+            fontWeight: 400,
+            lineHeight: 1.5,
+            color: 'var(--color-body)',
+          }}
+        >
+          Scan your room with an iPhone. Watch Homie navigate and run tasks
+          inside your actual space. Order the real thing.
         </p>
 
+        <div className="flex items-center gap-4 flex-wrap">
+          <button
+            type="button"
+            onClick={openStudio}
+            className="transition-all duration-150 cursor-pointer hover:opacity-90 active:scale-[0.98] inline-flex items-center"
+            style={{
+              background: 'var(--color-ink)',
+              color: 'var(--color-canvas)',
+              fontFamily: "'CursorGothic', sans-serif",
+              fontSize: '14px',
+              fontWeight: 500,
+              padding: '12px 24px',
+              height: '44px',
+              borderRadius: 'var(--radius-md)',
+              border: 'none',
+            }}
+          >
+            Open Studio
+          </button>
+          <button
+            type="button"
+            className="transition-opacity duration-150 hover:opacity-60 cursor-pointer"
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: 'var(--color-muted)',
+              fontFamily: "'CursorGothic', sans-serif",
+              fontSize: '14px',
+              fontWeight: 500,
+            }}
+          >
+            See how it works ↓
+          </button>
+        </div>
+      </section>
+
+      {/* ── Divider ── */}
+      <div style={{ height: '1px', background: 'var(--color-hairline)', margin: '0 32px' }} />
+
+      {/* ── Steps ── */}
+      <section className="max-w-5xl mx-auto px-8 py-20">
+        <p
+          className="text-xs font-semibold uppercase mb-12"
+          style={{
+            fontFamily: "'CursorGothic', sans-serif",
+            letterSpacing: '0.88px',
+            color: 'var(--color-muted)',
+          }}
+        >
+          How it works
+        </p>
+
+        <div className="grid gap-px" style={{ background: 'var(--color-hairline)' }}>
+          {STEPS.map((s, i) => (
+            <div
+              key={s.pill}
+              className="flex items-start gap-8 p-8"
+              style={{ background: 'var(--color-canvas)' }}
+            >
+              <span
+                className="shrink-0 w-7 h-7 flex items-center justify-center rounded-full text-xs font-semibold"
+                style={{
+                  background: 'var(--color-surface-strong)',
+                  color: 'var(--color-muted)',
+                  fontFamily: "'CursorGothic', sans-serif",
+                }}
+              >
+                0{i + 1}
+              </span>
+
+              <div className="flex-1 min-w-0">
+                <span
+                  className={`inline-block text-xs font-semibold px-2.5 py-0.5 rounded-full mb-3 ${s.pillColor}`}
+                  style={{
+                    letterSpacing: '0.88px',
+                    textTransform: 'uppercase',
+                    fontFamily: "'CursorGothic', sans-serif",
+                  }}
+                >
+                  {s.pill}
+                </span>
+
+                <h3
+                  className="mb-2"
+                  style={{
+                    fontFamily: "'CursorGothic', sans-serif",
+                    fontSize: '22px',
+                    fontWeight: 400,
+                    letterSpacing: '-0.11px',
+                    color: 'var(--color-ink)',
+                  }}
+                >
+                  {s.title}
+                </h3>
+                <p
+                  style={{
+                    fontFamily: "'CursorGothic', sans-serif",
+                    fontSize: '16px',
+                    lineHeight: 1.5,
+                    color: 'var(--color-body)',
+                    maxWidth: '480px',
+                  }}
+                >
+                  {s.body}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ── Divider ── */}
+      <div style={{ height: '1px', background: 'var(--color-hairline)', margin: '0 32px' }} />
+
+      {/* ── CTA band ── */}
+      <section
+        className="max-w-5xl mx-auto text-center"
+        style={{ padding: '96px 32px' }}
+      >
+        <h2
+          className="mb-8"
+          style={{
+            fontFamily: "'CursorGothic', sans-serif",
+            fontSize: 'clamp(28px, 4vw, 40px)',
+            fontWeight: 400,
+            letterSpacing: '-0.72px',
+            color: 'var(--color-ink)',
+          }}
+        >
+          Your room is the demo.
+        </h2>
         <button
           type="button"
           onClick={openStudio}
-          className="mt-10 rounded-full bg-emerald-500 px-8 py-3.5 text-base font-semibold text-neutral-950 shadow-lg shadow-emerald-500/25 ring-1 ring-emerald-400/40 transition hover:-translate-y-0.5 hover:bg-emerald-400 hover:shadow-emerald-500/40"
+          className="transition-all duration-150 cursor-pointer hover:opacity-90 active:scale-[0.98] inline-flex items-center"
+          style={{
+            background: 'var(--color-primary)',
+            color: 'var(--color-on-primary)',
+            fontFamily: "'CursorGothic', sans-serif",
+            fontSize: '14px',
+            fontWeight: 500,
+            padding: '10px 24px',
+            height: '40px',
+            borderRadius: 'var(--radius-md)',
+            border: 'none',
+          }}
         >
-          Open Studio →
+          Try Homie — it&apos;s free
         </button>
-      </div>
+      </section>
 
-      <div className="grid w-full max-w-3xl gap-4 sm:grid-cols-3">
-        {STEPS.map((s, i) => (
-          <div
-            key={s.title}
-            className="rounded-2xl border border-neutral-800 bg-neutral-900/40 p-5 transition hover:border-emerald-500/40 hover:bg-neutral-900/70"
-          >
-            <div className="mb-3 flex items-center gap-2 text-sm text-neutral-500">
-              <span className="text-2xl">{s.emoji}</span>
-              <span className="font-mono">0{i + 1}</span>
-            </div>
-            <div className="text-base font-semibold text-neutral-100">{s.title}</div>
-            <p className="mt-1 text-sm leading-relaxed text-neutral-400">{s.body}</p>
-          </div>
-        ))}
-      </div>
-
-      <footer className="text-xs text-neutral-600">
-        Built at Cursor Physical AI Hackathon — Almaty 2026
+      {/* ── Footer ── */}
+      <footer
+        className="border-t px-8 py-10 flex items-center justify-between flex-wrap gap-4"
+        style={{
+          borderColor: 'var(--color-hairline)',
+          fontFamily: "'CursorGothic', sans-serif",
+          fontSize: '13px',
+          color: 'var(--color-muted)',
+        }}
+      >
+        <span>Homie</span>
+        <span>Cursor Physical AI Hackathon · Almaty 2026</span>
       </footer>
     </main>
   );
