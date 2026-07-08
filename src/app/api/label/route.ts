@@ -154,7 +154,9 @@ function convertImageToWorld(
 /**
  * Dedupe a merged object list: drop any object with the same (case-insensitive)
  * name within 0.3m of an already-accepted one (near-duplicates from overlapping
- * tiles), then re-id sequentially so every surviving object has a unique id.
+ * tiles), re-id sequentially, then number any objects that share the same base
+ * name so the planner and user can refer to them unambiguously ("Chair 1" vs
+ * "Chair 2" instead of two objects both called "Chair").
  */
 function dedupeObjects(candidates: SceneObject[]): SceneObject[] {
   const kept: SceneObject[] = [];
@@ -169,5 +171,24 @@ function dedupeObjects(candidates: SceneObject[]): SceneObject[] {
     );
     if (!dup) kept.push(c);
   }
-  return kept.map((o, i) => ({ ...o, id: `obj-${i}` }));
+
+  // Count how many times each base name appears.
+  const counts = new Map<string, number>();
+  for (const o of kept) {
+    const k = o.name.toLowerCase();
+    counts.set(k, (counts.get(k) ?? 0) + 1);
+  }
+
+  // Append " 1", " 2" … only for names that appear more than once.
+  const seen = new Map<string, number>();
+  return kept.map((o, i) => {
+    const k = o.name.toLowerCase();
+    let name = o.name;
+    if ((counts.get(k) ?? 0) > 1) {
+      const n = (seen.get(k) ?? 0) + 1;
+      seen.set(k, n);
+      name = `${o.name} ${n}`;
+    }
+    return { ...o, id: `obj-${i}`, name };
+  });
 }
