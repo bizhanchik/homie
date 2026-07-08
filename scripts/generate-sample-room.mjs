@@ -32,6 +32,7 @@ if (typeof globalThis.FileReader === 'undefined') {
   };
 }
 
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const outPath = path.resolve(__dirname, '..', 'public', 'sample-room.glb');
 
