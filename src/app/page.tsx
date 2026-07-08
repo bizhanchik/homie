@@ -71,85 +71,99 @@ export default function Home() {
       </nav>
 
       {/* ── Hero ── */}
-      <section className="max-w-5xl mx-auto px-8 pt-24 pb-20">
-        <div className="mb-8 inline-flex items-center gap-2">
-          <span
-            className="text-xs font-semibold px-3 py-1 rounded-full"
+      <section className="max-w-6xl mx-auto px-8 pt-20 pb-16 flex items-center gap-8">
+        {/* Left: text */}
+        <div className="flex-1 min-w-0">
+          <div className="mb-8 inline-flex items-center gap-2">
+            <span
+              className="text-xs font-semibold px-3 py-1 rounded-full"
+              style={{
+                background: 'var(--color-surface-strong)',
+                color: 'var(--color-ink)',
+                letterSpacing: '0.88px',
+                textTransform: 'uppercase',
+                fontFamily: "'CursorGothic', sans-serif",
+              }}
+            >
+              Try before you buy
+            </span>
+          </div>
+
+          <h1
+            className="leading-none mb-6"
             style={{
-              background: 'var(--color-surface-strong)',
-              color: 'var(--color-ink)',
-              letterSpacing: '0.88px',
-              textTransform: 'uppercase',
               fontFamily: "'CursorGothic', sans-serif",
+              fontSize: 'clamp(40px, 6vw, 72px)',
+              fontWeight: 400,
+              letterSpacing: '-2px',
+              color: 'var(--color-ink)',
             }}
           >
-            Try before you buy
-          </span>
+            Try a home robot in{' '}
+            <span style={{ color: 'var(--color-primary)' }}>YOUR</span>{' '}
+            home.<br />Before you buy it.
+          </h1>
+
+          <p
+            className="mb-10 max-w-md"
+            style={{
+              fontFamily: "'CursorGothic', sans-serif",
+              fontSize: '18px',
+              fontWeight: 400,
+              lineHeight: 1.5,
+              color: 'var(--color-body)',
+            }}
+          >
+            Scan your room with an iPhone. Watch Homie navigate and run tasks
+            inside your actual space. Order the real thing.
+          </p>
+
+          <div className="flex items-center gap-4 flex-wrap">
+            <button
+              type="button"
+              onClick={openStudio}
+              className="transition-all duration-150 cursor-pointer hover:opacity-90 active:scale-[0.98] inline-flex items-center"
+              style={{
+                background: 'var(--color-ink)',
+                color: 'var(--color-canvas)',
+                fontFamily: "'CursorGothic', sans-serif",
+                fontSize: '14px',
+                fontWeight: 500,
+                padding: '12px 24px',
+                height: '44px',
+                borderRadius: 'var(--radius-md)',
+                border: 'none',
+              }}
+            >
+              Open Studio
+            </button>
+            <button
+              type="button"
+              className="transition-opacity duration-150 hover:opacity-60 cursor-pointer"
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--color-muted)',
+                fontFamily: "'CursorGothic', sans-serif",
+                fontSize: '14px',
+                fontWeight: 500,
+              }}
+            >
+              See how it works ↓
+            </button>
+          </div>
         </div>
 
-        <h1
-          className="leading-none mb-6"
-          style={{
-            fontFamily: "'CursorGothic', sans-serif",
-            fontSize: 'clamp(48px, 8vw, 80px)',
-            fontWeight: 400,
-            letterSpacing: '-2px',
-            color: 'var(--color-ink)',
-            maxWidth: '820px',
-          }}
-        >
-          Try a home robot in{' '}
-          <span style={{ color: 'var(--color-primary)' }}>YOUR</span>{' '}
-          home.<br />Before you buy it.
-        </h1>
-
-        <p
-          className="mb-10 max-w-md"
-          style={{
-            fontFamily: "'CursorGothic', sans-serif",
-            fontSize: '18px',
-            fontWeight: 400,
-            lineHeight: 1.5,
-            color: 'var(--color-body)',
-          }}
-        >
-          Scan your room with an iPhone. Watch Homie navigate and run tasks
-          inside your actual space. Order the real thing.
-        </p>
-
-        <div className="flex items-center gap-4 flex-wrap">
-          <button
-            type="button"
-            onClick={openStudio}
-            className="transition-all duration-150 cursor-pointer hover:opacity-90 active:scale-[0.98] inline-flex items-center"
-            style={{
-              background: 'var(--color-ink)',
-              color: 'var(--color-canvas)',
-              fontFamily: "'CursorGothic', sans-serif",
-              fontSize: '14px',
-              fontWeight: 500,
-              padding: '12px 24px',
-              height: '44px',
-              borderRadius: 'var(--radius-md)',
-              border: 'none',
-            }}
-          >
-            Open Studio
-          </button>
-          <button
-            type="button"
-            className="transition-opacity duration-150 hover:opacity-60 cursor-pointer"
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: 'var(--color-muted)',
-              fontFamily: "'CursorGothic', sans-serif",
-              fontSize: '14px',
-              fontWeight: 500,
-            }}
-          >
-            See how it works ↓
-          </button>
+        {/* Right: robot image */}
+        <div className="hidden md:flex shrink-0 items-center justify-center" style={{ width: '420px' }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/robot-hero.png"
+            alt="Homie robot"
+            width={420}
+            height={560}
+            style={{ objectFit: 'contain', width: '100%', height: 'auto' }}
+          />
         </div>
       </section>
 
