@@ -22,7 +22,15 @@ function fmt(n: number): string {
   return n.toFixed(1);
 }
 
-export default function LabelsPanel({ scene }: { scene: SceneModel | null }) {
+export default function LabelsPanel({
+  scene,
+  placingObjectId,
+  onPlace,
+}: {
+  scene: SceneModel | null;
+  placingObjectId?: string | null;
+  onPlace?: (id: string) => void;
+}) {
   return (
     <section
       className="shrink-0 p-4"
@@ -67,29 +75,51 @@ export default function LabelsPanel({ scene }: { scene: SceneModel | null }) {
         </p>
       ) : (
         <ul className="max-h-56 space-y-2 overflow-y-auto pr-1">
-          {scene.objects.map((o) => (
-            <li
-              key={o.id}
-              className="flex items-center gap-3 rounded-lg px-3 py-2"
-              style={{ border: '1px solid var(--color-hairline)', background: 'var(--color-surface-card)' }}
-            >
-              <span className="text-lg leading-none">{emojiFor(o)}</span>
-              <span className="min-w-0 flex-1">
-                <span
-                  className="block truncate text-sm font-medium capitalize"
-                  style={{ color: 'var(--color-ink)', fontFamily: "'CursorGothic', sans-serif" }}
-                >
-                  {o.name}
+          {scene.objects.map((o) => {
+            const isPlacing = placingObjectId === o.id;
+            return (
+              <li
+                key={o.id}
+                className="flex items-center gap-3 rounded-lg px-3 py-2"
+                style={{
+                  border: isPlacing ? '1px solid var(--color-primary)' : '1px solid var(--color-hairline)',
+                  background: isPlacing ? 'rgba(245,78,0,0.06)' : 'var(--color-surface-card)',
+                }}
+              >
+                <span className="text-lg leading-none">{emojiFor(o)}</span>
+                <span className="min-w-0 flex-1">
+                  <span
+                    className="block truncate text-sm font-medium capitalize"
+                    style={{ color: 'var(--color-ink)', fontFamily: "'CursorGothic', sans-serif" }}
+                  >
+                    {o.name}
+                  </span>
+                  <span
+                    className="block font-mono text-[11px]"
+                    style={{ color: 'var(--color-muted)' }}
+                  >
+                    {fmt(o.position.x)}, {fmt(o.position.z)} m
+                  </span>
                 </span>
-                <span
-                  className="block font-mono text-[11px]"
-                  style={{ color: 'var(--color-muted)' }}
-                >
-                  {fmt(o.position.x)}, {fmt(o.position.z)} m
-                </span>
-              </span>
-            </li>
-          ))}
+                {onPlace && (
+                  <button
+                    type="button"
+                    title={isPlacing ? 'Click floor to place' : 'Move on floor'}
+                    onClick={() => onPlace(o.id)}
+                    className="shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium transition cursor-pointer"
+                    style={{
+                      background: isPlacing ? 'var(--color-primary)' : 'var(--color-surface-strong)',
+                      color: isPlacing ? '#fff' : 'var(--color-ink)',
+                      border: '1px solid var(--color-hairline-strong)',
+                      fontFamily: "'CursorGothic', sans-serif",
+                    }}
+                  >
+                    {isPlacing ? '↓ click floor' : '✦'}
+                  </button>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
     </section>

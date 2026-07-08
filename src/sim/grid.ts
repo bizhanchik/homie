@@ -330,6 +330,46 @@ export function buildGrid(
     raw.set(fallbackRaw);
   }
 
+  // --- Flood-fill connectivity prune ---------------------------------------
+  // BFS from the room centre (the most reliable "definitely inside" seed).
+  // Any free cell not reachable from the seed is in a void or island outside
+  // the scanned mesh — block it so the robot can't wander into the black void.
+  {
+    const cx = Math.floor(cols / 2);
+    const cz = Math.floor(rows / 2);
+    // Find the nearest free seed within an expanding ring from center.
+    let seedC = -1, seedR = -1;
+    outer: for (let k = 0; k <= Math.max(cols, rows); k++) {
+      for (let dr = -k; dr <= k; dr++) {
+        for (let dc = -k; dc <= k; dc++) {
+          if (Math.max(Math.abs(dc), Math.abs(dr)) !== k) continue;
+          const nc = cx + dc, nr = cz + dr;
+          if (nc < 0 || nr < 0 || nc >= cols || nr >= rows) continue;
+          if (!dilated[nr * cols + nc]) { seedC = nc; seedR = nr; break outer; }
+        }
+      }
+    }
+    if (seedC >= 0) {
+      const reachable = new Uint8Array(cols * rows);
+      const q: [number, number][] = [[seedC, seedR]];
+      reachable[seedR * cols + seedC] = 1;
+      while (q.length > 0) {
+        const [c, r] = q.shift()!;
+        for (const [dc, dr] of [[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[-1,1],[1,-1],[1,1]] as const) {
+          const nc = c + dc, nr = r + dr;
+          if (nc < 0 || nr < 0 || nc >= cols || nr >= rows) continue;
+          const idx = nr * cols + nc;
+          if (reachable[idx] || dilated[idx]) continue;
+          reachable[idx] = 1;
+          q.push([nc, nr]);
+        }
+      }
+      for (let i = 0; i < dilated.length; i++) {
+        if (!dilated[i] && !reachable[i]) { dilated[i] = 1; raw[i] = 1; }
+      }
+    }
+  }
+
   // eslint-disable-next-line no-console
   console.log(
     `[homie] grid mode: ${mode} — ${cols}x${rows} cells, ` +

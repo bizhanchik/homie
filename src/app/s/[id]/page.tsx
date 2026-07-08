@@ -76,7 +76,8 @@ export default function StudioPage({
   const [loadingRoom, setLoadingRoom] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
-  const [obstacleMode, setObstacleMode] = useState<'add' | 'remove' | null>(null);
+  const [obstacleMode, setObstacleMode] = useState<'add' | 'remove' | 'move-robot' | null>(null);
+  const [placingObjectId, setPlacingObjectId] = useState<string | null>(null);
   const [orderOpen, setOrderOpen] = useState(false);
 
   // ---- Room loading -------------------------------------------------------
@@ -179,6 +180,18 @@ export default function StudioPage({
   const onObstacleRemoved = useCallback((id: string) => {
     agentRef.current.removeObstacle(id);
   }, []);
+
+  const onFloorClick = useCallback((at: { x: number; z: number }) => {
+    if (obstacleMode === 'move-robot') {
+      agentRef.current.teleportRobot(at);
+      setObstacleMode(null);
+      return;
+    }
+    if (placingObjectId) {
+      agentRef.current.moveObject(placingObjectId, at);
+      setPlacingObjectId(null);
+    }
+  }, [obstacleMode, placingObjectId]);
 
   // ---- Voice: spoken commands -> tasks ------------------------------------
   const roomLoadedRef = useRef(false);
@@ -302,7 +315,7 @@ export default function StudioPage({
       {/* ---- Main: viewer + sidebar ---- */}
       <div className="flex min-h-0 flex-1">
         {/* Viewer area */}
-        <main className={`relative min-h-0 flex-1 ${obstacleMode === 'add' ? 'cursor-crosshair' : obstacleMode === 'remove' ? 'cursor-pointer' : ''}`}>
+        <main className={`relative min-h-0 flex-1 ${obstacleMode === 'add' ? 'cursor-crosshair' : obstacleMode === 'remove' ? 'cursor-pointer' : (obstacleMode === 'move-robot' || placingObjectId) ? 'cursor-copy' : ''}`}>
           <RoomViewer
             ref={viewerRef}
             className="h-full w-full"
@@ -311,6 +324,7 @@ export default function StudioPage({
             obstacleRemoveMode={obstacleMode === 'remove'}
             onObstacleAdded={onObstacleAdded}
             onObstacleRemoved={onObstacleRemoved}
+            onFloorClick={onFloorClick}
           />
 
           {/* Toolbar (top-left) */}
@@ -332,6 +346,22 @@ export default function StudioPage({
                 {obstacleMode === 'add' ? 'Click floor to place' : 'Add obstacle'}
               </button>
 
+              {/* Move robot button */}
+              <button
+                type="button"
+                onClick={() => { setObstacleMode((m) => m === 'move-robot' ? null : 'move-robot'); setPlacingObjectId(null); }}
+                className="pointer-events-auto flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-medium backdrop-blur transition cursor-pointer"
+                style={{
+                  border: obstacleMode === 'move-robot' ? '1px solid rgba(59,130,246,0.6)' : '1px solid var(--color-hairline-strong)',
+                  background: obstacleMode === 'move-robot' ? 'rgba(59,130,246,0.08)' : 'rgba(247,247,244,0.88)',
+                  color: obstacleMode === 'move-robot' ? '#2563eb' : 'var(--color-ink)',
+                  fontFamily: "'CursorGothic', sans-serif",
+                }}
+              >
+                <span className="text-sm">🤖</span>
+                {obstacleMode === 'move-robot' ? 'Click floor to place' : 'Move robot'}
+              </button>
+
               {/* Remove obstacle button */}
               <button
                 type="button"
@@ -348,14 +378,20 @@ export default function StudioPage({
                 {obstacleMode === 'remove' ? 'Click obstacle to remove' : 'Remove obstacle'}
               </button>
 
-              {obstacleMode && (
+              {(obstacleMode || placingObjectId) && (
                 <span
                   className="pointer-events-none max-w-[12rem] rounded-lg px-3 py-1.5 text-[11px] backdrop-blur"
                   style={{ background: 'rgba(247,247,244,0.88)', color: 'var(--color-muted)', fontFamily: "'CursorGothic', sans-serif" }}
                 >
                   {obstacleMode === 'add'
-                    ? "Click anywhere on the floor to place a red block."
-                    : "Click a red block to erase it."}
+                    ? 'Click anywhere on the floor to place a red block.'
+                    : obstacleMode === 'remove'
+                    ? 'Click a red block to erase it.'
+                    : obstacleMode === 'move-robot'
+                    ? 'Click the floor where the robot should start.'
+                    : placingObjectId
+                    ? 'Click the floor to move this object.'
+                    : ''}
                 </span>
               )}
             </div>
@@ -473,7 +509,14 @@ export default function StudioPage({
           className="flex w-80 shrink-0 flex-col"
           style={{ borderLeft: '1px solid var(--color-hairline)', background: 'var(--color-canvas)' }}
         >
-          <LabelsPanel scene={agent.scene} />
+          <LabelsPanel
+            scene={agent.scene}
+            placingObjectId={placingObjectId}
+            onPlace={(id) => {
+              setPlacingObjectId((prev) => prev === id ? null : id);
+              setObstacleMode(null);
+            }}
+          />
           <div className="min-h-0 flex-1 overflow-y-auto">
             <PlanPanel plan={agent.plan} currentStepIndex={agent.currentStepIndex} />
           </div>

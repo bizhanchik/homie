@@ -49,6 +49,8 @@ export type AgentAPI = {
    */
   setDebugFailReplan(on: boolean): void;
   setVisionMode(mode: 'gpt4o' | 'sam2'): void;
+  teleportRobot(pos: Vec2): void;
+  moveObject(id: string, newPos: Vec2): void;
 };
 
 type AgentReducerState = {
@@ -246,15 +248,14 @@ export function useHomieAgent(opts?: {
 
       // Label API — never hard-fail the demo if vision is down.
       try {
-        // Multi-image capture: full-room view + overlapping zoomed crops, so the
-        // vision model detects exhaustively per-region instead of in one global
-        // pass. `bounds` (== td.bounds, what the grid was built from) is the outer
-        // frame; each image carries its own sub-rect bounds for world conversion.
-        const tiles = v.renderTopDownTiles();
+        // Single top-down image: one coordinate space, no per-tile offset math,
+        // no multi-tile duplicates. The full-room render is 2048px square so
+        // fine detail is preserved; tiles were causing same-object duplication.
+        const td2 = v.renderTopDown();
         const res = await fetch(labelEndpointRef.current, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ bounds, images: tiles.images }),
+          body: JSON.stringify({ bounds, images: [{ imageDataUrl: td2.imageDataUrl, bounds: td2.bounds }] }),
         });
         const data = (await res.json()) as ApiResult<SceneModel>;
         if (data.ok) {
@@ -771,6 +772,29 @@ export function useHomieAgent(opts?: {
     labelEndpointRef.current = mode === 'sam2' ? '/api/label-sam' : '/api/label';
   }, []);
 
+  const teleportRobot = useCallback((pos: Vec2) => {
+    const driver = driverRef.current;
+    if (!driver) return;
+    driver.cancel();
+    const grid = gridRef.current;
+    const safe = grid ? (grid.nearestFree(pos, 0.5) ?? grid.nearestFree(pos, 2.0) ?? pos) : pos;
+    driver.setPose(safe);
+    viewerRef.current?.setPath([]);
+  }, []);
+
+  const moveObject = useCallback((id: string, newPos: Vec2) => {
+    const scene = sceneRef.current;
+    if (!scene) return;
+    const obj = scene.objects.find((o) => o.id === id);
+    if (!obj) return;
+    obj.position = newPos;
+    viewerRef.current?.setLabels(scene.objects);
+    if (obj.kind === 'furniture' && gridRef.current) {
+      const size = Math.min(Math.max(obj.size.w, obj.size.d), 1.0);
+      gridRef.current.addObstacleFootprint(newPos, size);
+    }
+  }, []);
+
   // --- reset ---------------------------------------------------------------
   const reset = useCallback(() => {
     // Invalidate any in-flight run (its cancelled() flips true) AND stop the
@@ -817,6 +841,8 @@ export function useHomieAgent(opts?: {
     reset,
     setDebugFailReplan,
     setVisionMode,
+    teleportRobot,
+    moveObject,
   };
 }
 
