@@ -302,20 +302,22 @@ export function buildGrid(
           fallbackRaw[i] = 1;
           continue;
         }
-        // The real bug this fixes: per-cell geometry (floor-band) reasoning
-        // has already proven unreliable on this scan — that's WHY fallback
-        // mode tripped. A "confident positive signal" version of the same
-        // per-cell check (tried first) still saturated to 68% blocked on a
-        // real Scaniverse scan and silently no-op'd most move steps (the
-        // agent's unreachable-waypoint skip masked it as "done" instantly,
-        // with the robot never actually driving). So fallback mode drops
-        // per-cell geometry reasoning ENTIRELY: every non-margin cell is
-        // walkable. Real furniture becomes impassable via addObstacleFootprint
-        // stamps from the AI's labeled objects (called from use-homie-agent
-        // once scene labels resolve) — collision comes from what we're
-        // confident about (the vision-labeled furniture footprints), not a
-        // per-cell raycast heuristic that just failed on this mesh.
+        // Start walkable — override below for cells that are clearly walls.
         fallbackRaw[i] = 0;
+        // Wall detection in permissive mode: a cell whose ONLY geometry is
+        // high up (no hit near the floor) is a wall surface, not a floor cell.
+        // Signature: highest hit > groundY+1.0m  AND  lowest hit > groundY+0.35m
+        // (no floor-level evidence means the robot can't stand here).
+        // This leaves normal floor cells (hits near groundY) walkable while
+        // blocking bathroom walls/partitions that stick up from the floor.
+        const ys = hitsPerCell[r * cols + c];
+        if (ys && ys.length > 0) {
+          const maxHit = Math.max(...ys);
+          const minHit = Math.min(...ys);
+          if (maxHit > groundY + 1.0 && minHit > groundY + 0.35) {
+            fallbackRaw[i] = 1; // wall — block it
+          }
+        }
       }
     }
     dilated = dilate(fallbackRaw, cols, rows, radiusCells);
