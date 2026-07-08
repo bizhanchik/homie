@@ -13,15 +13,15 @@ function json(body: ApiResult<SceneModel>, status = 200): Response {
 }
 
 function mergeObjects(yolo: SceneObject[], gpt: SceneObject[]): SceneObject[] {
-  const merged: SceneObject[] = [...yolo];
+  // GPT-4o goes in first (semantic labels are correct). YOLO only adds objects
+  // not already covered by GPT-4o — fills gaps, doesn't overwrite.
+  const merged: SceneObject[] = [...gpt];
 
-  for (const g of gpt) {
+  for (const y of yolo) {
     const nearby = merged.some(
-      (y) =>
-        y.name.toLowerCase() === g.name.toLowerCase() &&
-        Math.hypot(y.position.x - g.position.x, y.position.z - g.position.z) < 0.4,
+      (g) => Math.hypot(g.position.x - y.position.x, g.position.z - y.position.z) < 0.5,
     );
-    if (!nearby) merged.push(g);
+    if (!nearby) merged.push(y);
   }
 
   // Renumber duplicates so the planner can address them unambiguously.
