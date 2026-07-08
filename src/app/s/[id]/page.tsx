@@ -296,34 +296,6 @@ export default function StudioPage({
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={toggleVisionMode}
-            title={visionMode === 'gpt4o' ? 'Switch to SAM2 (open source)' : 'Switch to GPT-4o'}
-            className="rounded-full px-3 py-1 text-[11px] font-semibold transition cursor-pointer"
-            style={{
-              border: '1px solid var(--color-hairline-strong)',
-              background: visionMode === 'sam2' ? 'var(--color-primary)' : 'var(--color-surface-card)',
-              color: visionMode === 'sam2' ? '#fff' : 'var(--color-muted)',
-              fontFamily: "'CursorGothic', sans-serif",
-            }}
-          >
-            {visionMode === 'sam2' ? 'SAM2' : 'GPT-4o'}
-          </button>
-          <VoiceButton state={voiceState} onToggle={toggleVoice} />
-          <button
-            type="button"
-            onClick={() => setOrderOpen(true)}
-            className="rounded-full px-4 py-1.5 text-sm font-semibold transition hover:opacity-90 cursor-pointer"
-            style={{
-              background: 'var(--color-primary)',
-              color: '#fff',
-              fontFamily: "'CursorGothic', sans-serif",
-              border: 'none',
-            }}
-          >
-            Order Homie
-          </button>
         </div>
       </header>
 
