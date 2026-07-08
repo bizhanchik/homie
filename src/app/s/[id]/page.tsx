@@ -2,18 +2,16 @@
 
 // The Homie studio — the demo screen. Left: the live 3D room (RoomViewer).
 // Right: what Homie sees (LabelsPanel) and what it plans (PlanPanel). Bottom:
-// the task bar. Empty until a room arrives — via phone scan (QR), the sample
-// room, or a dragged-in .glb.
+// the task bar. Empty until a room arrives — via the sample room, a picked
+// .glb file, or a dragged-in .glb.
 
 import { use, useCallback, useEffect, useRef, useState } from 'react';
 import RoomViewer, { type RoomViewerHandle } from '@/components/RoomViewer';
-import QrPairing from '@/components/QrPairing';
 import LabelsPanel from '@/components/LabelsPanel';
 import PlanPanel from '@/components/PlanPanel';
 import TaskBar from '@/components/TaskBar';
 import OrderModal from '@/components/OrderModal';
 import VoiceButton from '@/components/VoiceButton';
-import { useScanSync } from '@/lib/use-scan-sync';
 import { useHomieAgent } from '@/sim/use-homie-agent';
 import type { AgentState } from '@/lib/types';
 import {
@@ -51,8 +49,6 @@ export default function StudioPage({
 }) {
   const { id: sessionId } = use(params);
 
-  const scan = useScanSync(sessionId);
-
   // Homie's voice. Created once (client-only) in an effect below; narration
   // events from the agent are spoken through it. Held in a ref so the agent's
   // onNarration callback can reach it without re-subscribing.
@@ -73,7 +69,7 @@ export default function StudioPage({
 
   const viewerRef = useRef<RoomViewerHandle>(null);
   const loadingRef = useRef(false);
-  const autoLoadedRef = useRef(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [roomLoaded, setRoomLoaded] = useState(false);
   const [loadingRoom, setLoadingRoom] = useState(false);
@@ -81,11 +77,6 @@ export default function StudioPage({
   const [dragging, setDragging] = useState(false);
   const [obstacleMode, setObstacleMode] = useState(false);
   const [orderOpen, setOrderOpen] = useState(false);
-  // useScanSync derives mobileUrl from window.location.origin, so the QR content
-  // differs between server and client. Gate it behind mount to avoid a hydration
-  // mismatch (the whole studio is client-only anyway).
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
 
   // ---- Room loading -------------------------------------------------------
   const doLoadRoom = useCallback(async (glb: ArrayBuffer) => {
@@ -120,17 +111,25 @@ export default function StudioPage({
     if (viewerRef.current) agentRef.current.attachViewer(viewerRef.current);
   }, []);
 
-  // Auto-load once the phone beams a scan up.
-  useEffect(() => {
-    if (scan.status !== 'received' || autoLoadedRef.current) return;
-    autoLoadedRef.current = true;
-    scan
-      .fetchScan()
-      .then((buf) => doLoadRoom(buf))
-      .catch((e) =>
-        setLoadError(e instanceof Error ? e.message : String(e)),
-      );
-  }, [scan.status, scan, doLoadRoom]);
+  // Direct file picker — the primary way to bring in a room.
+  const pickFile = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
+  const onFileChosen = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      e.target.value = ''; // allow picking the same file again
+      if (!file) return;
+      file
+        .arrayBuffer()
+        .then((buf) => doLoadRoom(buf))
+        .catch((err) =>
+          setLoadError(err instanceof Error ? err.message : String(err)),
+        );
+    },
+    [doLoadRoom],
+  );
 
   // Full-window drag & drop of a .glb file.
   useEffect(() => {
@@ -362,21 +361,23 @@ export default function StudioPage({
                     Bring in your room
                   </h2>
                   <p className="mb-6 text-center text-sm text-neutral-400">
-                    Scan with your iPhone to beam a room up.
+                    Upload the .glb you scanned with your iPhone.
                   </p>
 
-                  {mounted ? (
-                    <QrPairing status={scan.status} mobileUrl={scan.mobileUrl} />
-                  ) : (
-                    <div className="flex flex-col items-center gap-4">
-                      <div className="flex h-[224px] w-[224px] items-center justify-center rounded-2xl bg-white shadow-lg">
-                        <span className="h-8 w-8 animate-spin rounded-full border-2 border-neutral-300 border-t-neutral-600" />
-                      </div>
-                      <span className="text-sm text-neutral-400">
-                        Preparing your pairing code…
-                      </span>
-                    </div>
-                  )}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".glb,model/gltf-binary"
+                    className="sr-only"
+                    onChange={onFileChosen}
+                  />
+                  <button
+                    type="button"
+                    onClick={pickFile}
+                    className="w-full rounded-xl bg-emerald-500 py-3 text-sm font-semibold text-neutral-950 shadow-lg shadow-emerald-500/20 transition hover:bg-emerald-400"
+                  >
+                    Upload room scan (.glb)
+                  </button>
 
                   <div className="my-6 flex w-full items-center gap-3 text-xs text-neutral-600">
                     <span className="h-px flex-1 bg-neutral-800" />

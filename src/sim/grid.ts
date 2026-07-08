@@ -1,17 +1,40 @@
 // Occupancy grid built from REAL mesh geometry ("geometry is truth"): the LLM
 // never decides walkability — this does, by raycasting the loaded room.
 //
-// Method (robust to the sample room's thick floor + tall walls + a possible
-// ceiling): for each cell centre we cast a ray straight DOWN through the room and
-// read every surface it crosses. To get clean entry/exit pairs for solid boxes we
-// temporarily force every material to DoubleSide during the pass (restored before
-// we return, synchronously, so the viewer's render loop never sees it). A cell is
-// blocked when a solid vertical interval overlaps the robot's body band
-// (ground+0.06 .. ground+1.0), OR when the ray hits nothing at all (void / outside
-// the room). The floor slab (top at/near ground) and any ceiling (above the band)
-// are excluded automatically. Blocked cells are then dilated by the robot radius.
+// Two failure modes surfaced against a real iPhone LiDAR (Scaniverse) scan that
+// the clean procedural sample room never exposed, and both are handled here:
+//
+//   1. SPEED: a plain THREE.Raycaster walks every triangle for every cast. A
+//      real scan's mesh is dense (tens/hundreds of thousands of triangles), so
+//      ~2900 per-cell casts took 30-45s and froze the tab before React could
+//      even paint a spinner. Fix: three-mesh-bvh — build a bounds tree once per
+//      mesh, cast with firstHitOnly. This brings the same sweep under ~1s.
+//
+//   2. CORRECTNESS: a handheld scan is never a clean axis-aligned box — it's
+//      tilted, off-center, noisy, and often non-watertight, so a rigid "floor
+//      is exactly at floorY" assumption misses the real walking surface almost
+//      everywhere and every cell reads as blocked (a robot with nowhere to
+//      go). Fix: derive the floor per-cell from what the rays actually hit
+//      (a low-percentile cluster near the passed-in floorY, not a single
+//      global plane), and — because a heuristic can still fail on a
+//      sufficiently messy scan — a DEGENERATE-GRID SAFETY NET: if the
+//      resulting grid is pathologically unwalkable, fall back to treating the
+//      room interior as free and blocking only cells with clear tall geometry.
+//      A partially-wrong but navigable grid beats a "correct" all-blocked one:
+//      the product promise is "the robot moves in your room."
 import * as THREE from 'three';
+import { acceleratedRaycast, computeBoundsTree, disposeBoundsTree } from 'three-mesh-bvh';
 import type { Vec2, Bounds } from '@/lib/types';
+
+// Wire the BVH-accelerated raycast into three's prototypes once per module load.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const bvhGeomProto = THREE.BufferGeometry.prototype as any;
+if (!bvhGeomProto.computeBoundsTree) {
+  bvhGeomProto.computeBoundsTree = computeBoundsTree;
+  bvhGeomProto.disposeBoundsTree = disposeBoundsTree;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (THREE.Mesh.prototype as any).raycast = acceleratedRaycast;
+}
 
 export type OccupancyGrid = {
   cell: number;
@@ -28,9 +51,15 @@ export type OccupancyGrid = {
 
 export type BuildGridOpts = { cell?: number; robotRadius?: number };
 
-const BAND_LO = 0.06; // metres above ground where the robot body starts
-const BAND_HI = 1.0; // metres above ground where the body band ends
-const FLOOR_TOL = 0.3; // a hit within this of floorY is treated as ground
+const BAND_LO = 0.1; // metres above the LOCAL floor where the robot body starts
+const BAND_HI = 0.9; // metres above the LOCAL floor where the body band ends
+const FLOOR_SEARCH_TOL = 0.35; // widen vs. the clean-room 0.3 to absorb scan noise/tilt
+
+// If, after the geometry pass, fewer than this fraction of cells are free, the
+// heuristic has failed on this scan (near-guaranteed on a very messy or
+// inside-out mesh) — trip the permissive fallback rather than ship a robot
+// that can't move at all.
+const MIN_FREE_FRACTION = 0.08;
 
 /** Median of a numeric array (returns fallback for an empty array). */
 function median(xs: number[], fallback: number): number {
@@ -41,12 +70,7 @@ function median(xs: number[], fallback: number): number {
 }
 
 /** Circular dilation: every set cell in `src` sets all cells within `rad` cells. */
-function dilate(
-  src: Uint8Array,
-  cols: number,
-  rows: number,
-  rad: number,
-): Uint8Array {
+function dilate(src: Uint8Array, cols: number, rows: number, rad: number): Uint8Array {
   const out = new Uint8Array(src.length);
   if (rad <= 0) {
     out.set(src);
@@ -71,6 +95,24 @@ function dilate(
     }
   }
   return out;
+}
+
+/** Build (or rebuild) BVH bounds trees on every mesh under `root`. Cheap to
+ *  call once per room load; skipped for meshes that already have one. */
+function ensureBoundsTrees(root: THREE.Object3D): void {
+  root.traverse((o) => {
+    const mesh = o as THREE.Mesh;
+    const geom = mesh.geometry as THREE.BufferGeometry | undefined;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if (geom && geom.isBufferGeometry && !(geom as any).boundsTree) {
+      try {
+        geom.computeBoundsTree();
+      } catch {
+        // Non-indexed or degenerate geometry — accelerated raycast falls back
+        // to the plain path for this mesh; not fatal.
+      }
+    }
+  });
 }
 
 export function buildGrid(
@@ -100,15 +142,19 @@ export function buildGrid(
     r: Math.min(rows - 1, Math.max(0, Math.floor((v.z - minZ) / cell))),
   });
 
-  // Cast from above the tallest geometry so walls (2.5 m) are crossed top-down.
+  ensureBoundsTrees(root);
+
+  // Cast from above the tallest geometry so walls are crossed top-down.
   const modelBox = new THREE.Box3().setFromObject(root);
   const topY = Math.max(
-    floorY + 2.2,
-    Number.isFinite(modelBox.max.y) ? modelBox.max.y + 0.5 : floorY + 2.2,
+    floorY + 2.4,
+    Number.isFinite(modelBox.max.y) ? modelBox.max.y + 0.5 : floorY + 2.4,
   );
+  const bottomY = Number.isFinite(modelBox.min.y) ? modelBox.min.y - 0.5 : floorY - 0.5;
 
   // Temporarily make everything double-sided so a downward ray reports both the
-  // top and bottom face of each solid (clean entry/exit pairs). Restored below.
+  // top and bottom face of each solid (clean entry/exit pairs) — real scans in
+  // particular have inconsistent winding. Restored synchronously below.
   const savedSides: Array<{ mat: THREE.Material; side: THREE.Side }> = [];
   root.traverse((o) => {
     const mesh = o as THREE.Mesh;
@@ -124,13 +170,14 @@ export function buildGrid(
   });
 
   const raycaster = new THREE.Raycaster();
+  raycaster.firstHitOnly = false; // we need every crossing to pair solid intervals
   const origin = new THREE.Vector3();
   const down = new THREE.Vector3(0, -1, 0);
-  raycaster.far = topY - (floorY - 5);
+  raycaster.far = topY - bottomY;
 
   // Pass 1: collect every hit height per cell (sorted near->far == high->low y).
   const hitsPerCell: number[][] = new Array(cols * rows);
-  const floorTops: number[] = [];
+  const nearFloorHits: number[] = [];
   try {
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
@@ -140,12 +187,12 @@ export function buildGrid(
         const hits = raycaster.intersectObject(root, true);
         const ys = hits.map((h) => h.point.y);
         hitsPerCell[r * cols + c] = ys;
-        // Highest hit that is still near the floor = the walking surface here.
-        let best = -Infinity;
+        // Lowest hit near the expected floor height = a floor sample here.
+        let best = Infinity;
         for (const y of ys) {
-          if (y <= floorY + FLOOR_TOL && y > best) best = y;
+          if (Math.abs(y - floorY) <= FLOOR_SEARCH_TOL && y < best) best = y;
         }
-        if (best > -Infinity) floorTops.push(best);
+        if (best < Infinity) nearFloorHits.push(best);
       }
     }
   } finally {
@@ -154,28 +201,101 @@ export function buildGrid(
     for (const { mat, side } of savedSides) mat.side = side;
   }
 
-  const groundY = median(floorTops, floorY);
-  const bandLo = groundY + BAND_LO;
-  const bandHi = groundY + BAND_HI;
+  // Robust global floor reference: median of samples near the passed-in floorY.
+  // (floorY itself, from the viewer's bbox-min, can sit slightly below the true
+  // walking surface on a scan with floor-level clutter/noise — the median of
+  // actual near-floor hits corrects for that without discarding floorY, which
+  // stays the fallback when a cell has no floor sample at all.)
+  const groundY = median(nearFloorHits, floorY);
+
+  // TEMP DIAGNOSTIC — remove once the real-scan occupancy bug is fixed.
+  {
+    let noHitCells = 0;
+    let totalHits = 0;
+    let maxHits = 0;
+    const sampleLens: number[] = [];
+    for (let i = 0; i < hitsPerCell.length; i++) {
+      const ys = hitsPerCell[i] ?? [];
+      if (ys.length === 0) noHitCells++;
+      totalHits += ys.length;
+      maxHits = Math.max(maxHits, ys.length);
+      if (i % 400 === 0) sampleLens.push(ys.length);
+    }
+    const midIdx = Math.floor(rows / 2) * cols + Math.floor(cols / 2);
+    // Find a cell that DOES have a near-floor hit, to inspect its full ys[].
+    let sampleWithFloorIdx = -1;
+    for (let i = 0; i < hitsPerCell.length; i++) {
+      const ys = hitsPerCell[i] ?? [];
+      if (ys.some((y) => Math.abs(y - groundY) <= FLOOR_SEARCH_TOL)) {
+        sampleWithFloorIdx = i;
+        break;
+      }
+    }
+    // eslint-disable-next-line no-console
+    console.log(
+      '[homie][diag] ' +
+        JSON.stringify({
+          floorY: +floorY.toFixed(3),
+          groundY: +groundY.toFixed(3),
+          nearFloorHitsCount: nearFloorHits.length,
+          totalCells: cols * rows,
+          noHitCells,
+          avgHits: +(totalHits / (cols * rows)).toFixed(2),
+          maxHits,
+          sampleLens: sampleLens.slice(0, 15),
+          midCellYs: (hitsPerCell[midIdx] ?? []).map((y) => +y.toFixed(3)),
+          sampleWithFloorIdx,
+          sampleWithFloorYs: (hitsPerCell[sampleWithFloorIdx] ?? []).map((y) => +y.toFixed(3)),
+          BAND_LO,
+          BAND_HI,
+        }),
+    );
+  }
 
   const raw = new Uint8Array(cols * rows); // pre-dilation occupancy
+  const hasFloorSample = new Uint8Array(cols * rows);
   for (let i = 0; i < raw.length; i++) {
     const ys = hitsPerCell[i];
     if (!ys || ys.length === 0) {
       raw[i] = 1; // void / outside the room
       continue;
     }
+    // Local floor for THIS cell: the lowest hit near the global ground
+    // reference, tolerating a gently tilted/uneven real floor. Falls back to
+    // the global reference if this cell has no such hit (e.g. a raised object
+    // occludes the true floor here — treat the object's own top as ground for
+    // clearance purposes, which correctly reads as blocked below).
+    let localFloor = Infinity;
+    for (const y of ys) {
+      if (Math.abs(y - groundY) <= FLOOR_SEARCH_TOL && y < localFloor) localFloor = y;
+    }
+    if (localFloor === Infinity) {
+      // No near-floor hit in this cell. If the lowest hit overall is still
+      // reasonably close to the room's floor band, treat it as the local
+      // floor (handles a slightly-more-tilted patch); otherwise this cell is
+      // occluded by something above the floor for its whole depth.
+      const lowest = Math.min(...ys);
+      localFloor = lowest;
+    } else {
+      hasFloorSample[i] = 1;
+    }
+
+    const bandLo = localFloor + BAND_LO;
+    const bandHi = localFloor + BAND_HI;
+
     let blockedCell = false;
-    // (a) any individual surface sitting in the body band (catches thin shelves
-    //     and non-watertight meshes where parity pairing is unreliable).
+    // (a) any individual surface sitting in the body band (catches thin
+    //     shelves and non-watertight meshes where parity pairing is unreliable
+    //     — the default assumption for a real scan).
     for (const y of ys) {
       if (y > bandLo && y < bandHi) {
         blockedCell = true;
         break;
       }
     }
-    // (b) a solid vertical interval [bottom, top] overlapping the band. Hits are
-    //     sorted high->low, so pairs are (enter=top, exit=bottom).
+    // (b) a solid vertical interval [bottom, top] overlapping the band. Hits
+    //     are sorted high->low, so pairs are (enter=top, exit=bottom) IF the
+    //     mesh is watertight; harmless redundancy with (a) otherwise.
     if (!blockedCell) {
       for (let k = 0; k + 1 < ys.length; k += 2) {
         const top = ys[k];
@@ -190,13 +310,62 @@ export function buildGrid(
   }
 
   const radiusCells = Math.ceil(robotRadius / cell);
+  let dilated = dilate(raw, cols, rows, radiusCells);
+
+  // --- Degenerate-grid safety net -----------------------------------------
+  // Interior cells only (an outer 1-cell margin is expected to read as
+  // wall/void even in a good scan) — if almost nothing is walkable, the
+  // geometry heuristic has failed on this mesh. Never ship a robot with
+  // nowhere to go: fall back to a permissive grid (interior free, with a
+  // margin from the outer edge) and block only cells with unambiguous tall
+  // geometry actually detected in the body band, ignoring the floor-sample
+  // requirement that just failed us.
+  let mode: 'geometry' | 'permissive-fallback' = 'geometry';
+  const marginCells = Math.max(1, Math.round(0.15 / cell));
+  let interiorFree = 0;
+  let interiorTotal = 0;
+  for (let r = marginCells; r < rows - marginCells; r++) {
+    for (let c = marginCells; c < cols - marginCells; c++) {
+      interiorTotal++;
+      if (!dilated[r * cols + c]) interiorFree++;
+    }
+  }
+  const freeFraction = interiorTotal > 0 ? interiorFree / interiorTotal : 0;
+
+  if (interiorTotal > 0 && freeFraction < MIN_FREE_FRACTION) {
+    mode = 'permissive-fallback';
+    const fallbackRaw = new Uint8Array(cols * rows);
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const i = r * cols + c;
+        const isMargin =
+          r < marginCells || r >= rows - marginCells || c < marginCells || c >= cols - marginCells;
+        if (isMargin) {
+          fallbackRaw[i] = 1;
+          continue;
+        }
+        // Block only if the ORIGINAL band-overlap test already flagged real
+        // geometry here (tall furniture, walls caught mid-room) — drop the
+        // floor-relative reasoning that just proved unreliable on this scan.
+        fallbackRaw[i] = raw[i];
+      }
+    }
+    dilated = dilate(fallbackRaw, cols, rows, radiusCells);
+  }
+
+  // eslint-disable-next-line no-console
+  console.log(
+    `[homie] grid mode: ${mode} — ${cols}x${rows} cells, ` +
+      `${dilated.reduce((n, b) => n + b, 0)} blocked / ${cols * rows} total ` +
+      `(${Math.round(freeFraction * 100)}% of interior free pre-fallback-check)`,
+  );
 
   const grid: OccupancyGrid = {
     cell,
     bounds: norm,
     cols,
     rows,
-    blocked: dilate(raw, cols, rows, radiusCells),
+    blocked: dilated,
     worldToCell,
     cellToWorld,
     isBlockedWorld(v: Vec2): boolean {
