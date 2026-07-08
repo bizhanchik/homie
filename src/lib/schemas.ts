@@ -46,9 +46,14 @@ export const planSchema = z.object({
   steps: z.array(planStepSchema),
 });
 
-export const labelRequestSchema = z.object({
+export const labelImageSchema = z.object({
   imageDataUrl: z.string(),
   bounds: boundsSchema,
+});
+
+export const labelRequestSchema = z.object({
+  bounds: boundsSchema,
+  images: z.array(labelImageSchema).min(1),
 });
 
 export const planRequestSchema = z.object({

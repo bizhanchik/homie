@@ -55,9 +55,15 @@ export type NarrationEvent = { at: number; text: string }; // at = ms timestamp
 // --- API payloads -----------------------------------------------------------
 
 // POST /api/label  ->  ApiResult<SceneModel>
-// imageDataUrl: a top-down orthographic render of the room (data: URL).
-// bounds: world bounds of that render, injected back into the returned SceneModel.
-export type LabelRequest = { imageDataUrl: string; bounds: Bounds };
+// A multi-image top-down capture: image [0] is the full-room orthographic render,
+// images [1..] are overlapping zoomed crops of that SAME render (for exhaustive
+// per-region detection). Each image carries its OWN world bounds so imageToWorld()
+// maps THAT image's normalized [0,1] coords to world meters.
+// bounds: overall framed world bounds, injected back into the returned SceneModel.
+export type LabelRequest = {
+  bounds: Bounds; // overall framed world bounds, injected into the returned SceneModel
+  images: { imageDataUrl: string; bounds: Bounds }[]; // ordered: [0]=full room, [1..]=zoomed region crops; each image's own bounds map ITS OWN normalized [0,1] coords to world meters
+};
 
 // POST /api/plan  ->  ApiResult<Plan>
 export type PlanRequest = {

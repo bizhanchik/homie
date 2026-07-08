@@ -7,44 +7,60 @@ import type { PlanRequest, SceneModel } from './types';
 export type PromptPair = { system: string; user: string };
 
 /**
- * GPT-4o vision: analyze a TOP-DOWN orthographic render of a scanned room.
- * The image is passed separately as an image content block by the caller.
- * Returns SceneModel MINUS bounds (server injects bounds after parsing).
+ * GPT-4o vision: analyze MULTIPLE top-down renders of a scanned room in one call.
+ * Image 1 is the full-room TOP-DOWN orthographic render; images 2+ are zoomed
+ * crops of overlapping regions of that SAME render (for exhaustive per-region
+ * detection). The images are passed separately as ordered image content blocks by
+ * the caller. Returns one label set per input image (server converts each image's
+ * normalized coords to world using THAT image's own bounds, then merges + dedupes).
  */
 export function labelPrompt(): PromptPair {
   const system = [
     'You are a spatial scene-understanding model for a home robotics simulator.',
-    'You receive a single TOP-DOWN (bird\'s-eye) orthographic render of a 3D room scan.',
-    'You output a structured map of the room as STRICT JSON. No prose, no markdown, no code fences.',
+    'You receive an ORDERED LIST of TOP-DOWN (bird\'s-eye) orthographic images of one room scan:',
+    '  - Image 1 is the FULL top-down room view (use it for overall layout context).',
+    '  - Images 2+ are ZOOMED-IN crops of overlapping regions of that SAME top-down view.',
+    'You output a structured map as STRICT JSON. No prose, no markdown, no code fences.',
     '',
-    'COORDINATES: use NORMALIZED image coordinates in the range [0,1].',
+    'COORDINATES: use NORMALIZED image coordinates in the range [0,1], measured WITHIN',
+    'EACH IMAGE\'s OWN frame (do NOT convert crops back to the full image — the server does that).',
     '  x = 0 is the LEFT edge, x = 1 is the RIGHT edge (x increases rightward).',
     '  z = 0 is the TOP edge, z = 1 is the BOTTOM edge (z increases downward = image y).',
     '  A position is the CENTER of the object. A size is its footprint width (w, along x)',
-    '  and depth (d, along z), also as fractions of the image in [0,1].',
+    '  and depth (d, along z), also as fractions of THAT image in [0,1].',
     '',
-    'TASK:',
-    '  1. Identify every distinct object you can see (tables, sofas, chairs, beds, rugs,',
-    '     cabinets, appliances, doors, doorways/openings, etc.).',
+    'TASK — for EACH image independently and EXHAUSTIVELY:',
+    '  1. List EVERY distinct object visible IN THAT IMAGE. Be exhaustive: include small and',
+    '     cluttered items (cables, monitors, boxes, shelves, lamps, plants, decor, cups, books)',
+    '     — not just the dominant furniture. Duplicates across overlapping images are MERGED',
+    '     automatically by the server, so it is safe (and expected) to over-report.',
     '  2. Classify each with "kind": "furniture" | "door" | "opening" | "other".',
-    '  3. Give each a short human "name" (e.g. "coffee table", "sofa", "front door").',
-    '  4. Identify open, walkable FLOOR zones (clear space a robot can stand in) as',
-    '     circles: a center point and a radius, all in normalized [0,1].',
+    '  3. Give each a short human "name" (e.g. "coffee table", "sofa", "front door", "monitor").',
+    '  4. Identify open, walkable FLOOR zones (clear space a robot can stand in) as circles:',
+    '     a center point and a radius, all in normalized [0,1] within THAT image.',
+    '  ids only need to be unique WITHIN each image (the server re-ids on merge).',
+    '  If unsure about a region, prefer marking it as an object over walkable (never claim',
+    '  occupied space is walkable).',
     '',
-    'Return ONLY this JSON shape (do NOT include "bounds" — the server adds it):',
+    'Return ONE entry per input image, in the SAME order as the images. Return ONLY this JSON',
+    'shape (do NOT include "bounds" — the server adds it):',
     '{',
-    '  "objects": [',
-    '    { "id": "obj-1", "name": "coffee table", "kind": "furniture",',
-    '      "position": { "x": 0.5, "z": 0.5 }, "size": { "w": 0.2, "d": 0.12 } }',
-    '  ],',
-    '  "walkableZones": [ { "center": { "x": 0.3, "z": 0.7 }, "radius": 0.15 } ]',
+    '  "images": [',
+    '    {',
+    '      "objects": [',
+    '        { "id": "obj-1", "name": "coffee table", "kind": "furniture",',
+    '          "position": { "x": 0.5, "z": 0.5 }, "size": { "w": 0.2, "d": 0.12 } }',
+    '      ],',
+    '      "walkableZones": [ { "center": { "x": 0.3, "z": 0.7 }, "radius": 0.15 } ]',
+    '    }',
+    '  ]',
     '}',
-    'Give every object a unique "id". If unsure about a region, prefer marking it as an',
-    'object over marking it walkable (never claim occupied space is walkable).',
   ].join('\n');
 
   const user =
-    'Analyze this top-down room render and return the objects and walkable zones as strict JSON in the specified normalized-coordinate format.';
+    'Analyze each of these top-down room images (image 1 = full room, the rest = zoomed region crops) ' +
+    'and return one exhaustive label set per image, in order, as strict JSON in the specified ' +
+    'per-image normalized-coordinate format.';
 
   return { system, user };
 }

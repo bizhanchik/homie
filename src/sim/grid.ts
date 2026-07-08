@@ -208,52 +208,9 @@ export function buildGrid(
   // stays the fallback when a cell has no floor sample at all.)
   const groundY = median(nearFloorHits, floorY);
 
-  // TEMP DIAGNOSTIC — remove once the real-scan occupancy bug is fixed.
-  {
-    let noHitCells = 0;
-    let totalHits = 0;
-    let maxHits = 0;
-    const sampleLens: number[] = [];
-    for (let i = 0; i < hitsPerCell.length; i++) {
-      const ys = hitsPerCell[i] ?? [];
-      if (ys.length === 0) noHitCells++;
-      totalHits += ys.length;
-      maxHits = Math.max(maxHits, ys.length);
-      if (i % 400 === 0) sampleLens.push(ys.length);
-    }
-    const midIdx = Math.floor(rows / 2) * cols + Math.floor(cols / 2);
-    // Find a cell that DOES have a near-floor hit, to inspect its full ys[].
-    let sampleWithFloorIdx = -1;
-    for (let i = 0; i < hitsPerCell.length; i++) {
-      const ys = hitsPerCell[i] ?? [];
-      if (ys.some((y) => Math.abs(y - groundY) <= FLOOR_SEARCH_TOL)) {
-        sampleWithFloorIdx = i;
-        break;
-      }
-    }
-    // eslint-disable-next-line no-console
-    console.log(
-      '[homie][diag] ' +
-        JSON.stringify({
-          floorY: +floorY.toFixed(3),
-          groundY: +groundY.toFixed(3),
-          nearFloorHitsCount: nearFloorHits.length,
-          totalCells: cols * rows,
-          noHitCells,
-          avgHits: +(totalHits / (cols * rows)).toFixed(2),
-          maxHits,
-          sampleLens: sampleLens.slice(0, 15),
-          midCellYs: (hitsPerCell[midIdx] ?? []).map((y) => +y.toFixed(3)),
-          sampleWithFloorIdx,
-          sampleWithFloorYs: (hitsPerCell[sampleWithFloorIdx] ?? []).map((y) => +y.toFixed(3)),
-          BAND_LO,
-          BAND_HI,
-        }),
-    );
-  }
-
   const raw = new Uint8Array(cols * rows); // pre-dilation occupancy
   const hasFloorSample = new Uint8Array(cols * rows);
+  const localFloorArr = new Float64Array(cols * rows).fill(NaN);
   for (let i = 0; i < raw.length; i++) {
     const ys = hitsPerCell[i];
     if (!ys || ys.length === 0) {
@@ -279,6 +236,7 @@ export function buildGrid(
     } else {
       hasFloorSample[i] = 1;
     }
+    localFloorArr[i] = localFloor;
 
     const bandLo = localFloor + BAND_LO;
     const bandHi = localFloor + BAND_HI;
@@ -344,13 +302,32 @@ export function buildGrid(
           fallbackRaw[i] = 1;
           continue;
         }
-        // Block only if the ORIGINAL band-overlap test already flagged real
-        // geometry here (tall furniture, walls caught mid-room) — drop the
-        // floor-relative reasoning that just proved unreliable on this scan.
-        fallbackRaw[i] = raw[i];
+        // The real bug this fixes: per-cell geometry (floor-band) reasoning
+        // has already proven unreliable on this scan — that's WHY fallback
+        // mode tripped. A "confident positive signal" version of the same
+        // per-cell check (tried first) still saturated to 68% blocked on a
+        // real Scaniverse scan and silently no-op'd most move steps (the
+        // agent's unreachable-waypoint skip masked it as "done" instantly,
+        // with the robot never actually driving). So fallback mode drops
+        // per-cell geometry reasoning ENTIRELY: every non-margin cell is
+        // walkable. Real furniture becomes impassable via addObstacleFootprint
+        // stamps from the AI's labeled objects (called from use-homie-agent
+        // once scene labels resolve) — collision comes from what we're
+        // confident about (the vision-labeled furniture footprints), not a
+        // per-cell raycast heuristic that just failed on this mesh.
+        fallbackRaw[i] = 0;
       }
     }
     dilated = dilate(fallbackRaw, cols, rows, radiusCells);
+    // Critical: addObstacleFootprint (below) mutates `raw` in place and
+    // re-dilates FROM `raw` — it has no idea a fallback grid exists. Without
+    // this sync it stamps a footprint onto the stale, mostly-blocked
+    // geometry-pass array and re-dilates THAT, silently discarding the
+    // permissive fallback and re-blocking almost the entire room the moment
+    // any obstacle (a labeled-furniture stamp, or a user's click-to-drop) is
+    // added. Every future mutation must build on the array that's actually in
+    // effect.
+    raw.set(fallbackRaw);
   }
 
   // eslint-disable-next-line no-console

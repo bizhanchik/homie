@@ -221,18 +221,49 @@ export function useHomieAgent(opts?: {
 
       // Label API — never hard-fail the demo if vision is down.
       try {
+        // Multi-image capture: full-room view + overlapping zoomed crops, so the
+        // vision model detects exhaustively per-region instead of in one global
+        // pass. `bounds` (== td.bounds, what the grid was built from) is the outer
+        // frame; each image carries its own sub-rect bounds for world conversion.
+        const tiles = v.renderTopDownTiles();
         const res = await fetch('/api/label', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            imageDataUrl: v.renderTopDown().imageDataUrl,
-            bounds,
-          }),
+          body: JSON.stringify({ bounds, images: tiles.images }),
         });
         const data = (await res.json()) as ApiResult<SceneModel>;
         if (data.ok) {
           sceneRef.current = data.data;
           v.setLabels(data.data.objects);
+          // Stamp real furniture footprints onto the grid now that we have
+          // them. Load-bearing in permissive-fallback mode (a messy real scan
+          // where per-cell geometry occupancy proved unreliable and the grid
+          // fell back to "everywhere walkable except a thin margin") — this is
+          // what actually gives the robot something to navigate AROUND,
+          // sourced from the vision labels we trust rather than the raycast
+          // heuristic that just failed. Harmless in normal geometry mode too
+          // (those cells are typically already blocked there).
+          for (const obj of data.data.objects) {
+            if (obj.kind === 'furniture') {
+              // Cap the stamped footprint — real-scan vision labeling can
+              // overestimate an object's real-world size (seen: a "desk"
+              // reported at 2.56m wide), and addObstacleFootprint already adds
+              // a robot-radius dilation on top. Uncapped, a single oversized
+              // label can blow a ~1.8m no-go halo around it, which swallows
+              // every reasonable "go near this object" approach radius and
+              // makes every task targeting it silently un-pathable.
+              const size = Math.min(Math.max(obj.size.w, obj.size.d), 1.0);
+              gridRef.current?.addObstacleFootprint(obj.position, size);
+            }
+          }
+          // The robot was seeded before these stamps existed — if a footprint
+          // now covers its start position, nudge it to the nearest free cell.
+          const driver = driverRef.current;
+          const grid = gridRef.current;
+          if (driver && grid && grid.isBlockedWorld(driver.position)) {
+            const safe = grid.nearestFree(driver.position, 1.5);
+            if (safe) driver.setPose(safe);
+          }
           dispatch({ type: 'setScene', scene: data.data, state: 'scene_ready' });
           const names = data.data.objects.map((o) => o.name);
           narrate(
@@ -265,7 +296,10 @@ export function useHomieAgent(opts?: {
       const from = driver.position;
       let path: Vec2[];
       if (grid) {
-        const target = grid.nearestFree(step.waypoint, 0.8) ?? step.waypoint;
+        // A generous approach radius: waypoints often target an object's own
+        // (now-obstacle-stamped) position, so the free landing spot is just
+        // outside that footprint's halo, not within a few cm of the point.
+        const target = grid.nearestFree(step.waypoint, 1.6) ?? step.waypoint;
         const routed = findPath(grid, from, target);
         if (!routed) {
           // Target is walled off (e.g. an obstacle's dilation swallowed the

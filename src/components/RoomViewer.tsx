@@ -26,6 +26,14 @@ import type { Vec2, Bounds, SceneObject } from '@/lib/types';
 export type RoomViewerHandle = {
   loadGlb(buffer: ArrayBuffer): Promise<void>; // parse + add to scene, fit camera, compute floor Y + bounds
   renderTopDown(): { imageDataUrl: string; bounds: Bounds }; // orthographic top-down PNG + exact world bounds of the framed area
+  // Multi-image top-down capture for exhaustive labeling: one high-res top-down
+  // render, sliced into a full frame (index 0) + 4 overlapping zoomed quadrant
+  // crops (indices 1-4). Each image carries its OWN world bounds (a sub-rect of
+  // the overall frame) so imageToWorld() maps ITS normalized coords to world.
+  renderTopDownTiles(): {
+    bounds: Bounds; // overall framed world bounds (same as renderTopDown().bounds)
+    images: { imageDataUrl: string; bounds: Bounds }[];
+  };
   getRoomRoot(): unknown | null; // THREE.Object3D of the loaded room (for sim raycasts)
   getFloorY(): number;
   setRobotPose(pose: { position: Vec2; headingRad: number }): void; // capsule robot, y = floorY
@@ -55,17 +63,20 @@ const ROBOT_RADIUS = 0.35;
 const ROBOT_TOTAL_H = 0.9;
 const OBSTACLE_SIZE = 0.4;
 const TOPDOWN_PX = 1024;
+// Single high-res top-down capture that renderTopDownTiles() crops into 5 images.
+// Rendered ONCE, then only 2D-canvas cropping per tile (no extra WebGL passes).
+const TOPDOWN_HQ_PX = 2048;
 const CLICK_MOVE_THRESHOLD = 6; // px; larger => treated as an orbit drag, not a click
 const LABEL_HEIGHT = 1.0; // meters above floor for label pins
 
-// ---- Skinned robot model (public/robot.glb) --------------------------------
+// ---- Skinned robot model (public/low_poly_humanoid_robot.glb) --------------
 // Optional GLB (skeleton + walk/idle clips, usually FBX->GLB) that replaces the
-// capsule. Drop it at public/robot.glb; a room (re)load picks it up. If absent
-// or unparseable we silently keep the capsule.
+// capsule. A room (re)load picks it up. If absent or unparseable we silently
+// keep the capsule.
 //
 // MANUAL-FIX KNOBS — tweak these first if the imported model looks wrong:
-const ROBOT_GLB_URL = '/robot.glb';
-const ROBOT_TARGET_HEIGHT = 0.9; // m; model is uniformly scaled so its bbox height == this
+const ROBOT_GLB_URL = '/low_poly_humanoid_robot.glb';
+const ROBOT_TARGET_HEIGHT = 1.5; // m; model is uniformly scaled so its bbox height == this
 // Our heading convention is forward = local +X (see the capsule's cone). glTF
 // characters usually face +Z, so we spin the model +90° about Y to map +Z->+X.
 // If the robot faces sideways/backward in the demo, change this by ±Math.PI/2
@@ -116,6 +127,75 @@ function disposeObject(obj: THREE.Object3D): void {
     if (Array.isArray(mat)) mat.forEach((m) => m?.dispose?.());
     else mat?.dispose?.();
   });
+}
+
+// Capture a raw top-down orthographic RGBA buffer at an arbitrary square pixel
+// size. Sets up the ortho camera (up=(0,0,-1) => screen-right=+X, screen-down=+Z,
+// exactly what imageToWorld() assumes), hides non-room groups, renders to an
+// offscreen target, reads pixels, and flips vertically (WebGL row 0 = bottom;
+// canvas row 0 = top) so the returned buffer is canvas/PNG ready.
+// `framed` is the square world rectangle the buffer covers (room + 5% margin).
+// Shared by renderTopDown() (at TOPDOWN_PX) and renderTopDownTiles() (at HQ).
+function captureTopDownRaw(
+  S: ViewerState | null,
+  px: number,
+): { raw: Uint8ClampedArray; framed: Bounds } | null {
+  if (!S) return null;
+  const { renderer, scene, floorY, bounds } = S;
+
+  // Square frame covering the room + 5% margin (keeps the PNG undistorted).
+  const rawW = bounds.maxX - bounds.minX;
+  const rawD = bounds.maxZ - bounds.minZ;
+  const cx = (bounds.minX + bounds.maxX) / 2;
+  const cz = (bounds.minZ + bounds.maxZ) / 2;
+  const half = (Math.max(rawW, rawD, 0.001) * 1.05) / 2;
+  const framed: Bounds = {
+    minX: cx - half,
+    maxX: cx + half,
+    minZ: cz - half,
+    maxZ: cz + half,
+  };
+
+  // Top-down ortho camera. up=(0,0,-1) => screen-right maps to world +X and
+  // screen-down maps to world +Z, exactly what imageToWorld() assumes.
+  const cam = new THREE.OrthographicCamera(-half, half, half, -half, 0.01, 20000);
+  cam.up.set(0, 0, -1);
+  cam.position.set(cx, floorY + 1000, cz);
+  cam.lookAt(cx, floorY, cz);
+  cam.updateProjectionMatrix();
+
+  // Hide everything that isn't the room.
+  const robotVis = S.robotGroup.visible;
+  const obsVis = S.obstaclesGroup.visible;
+  const pathVis = S.pathGroup.visible;
+  S.robotGroup.visible = false;
+  S.obstaclesGroup.visible = false;
+  S.pathGroup.visible = false;
+
+  const rt = new THREE.WebGLRenderTarget(px, px);
+  rt.texture.colorSpace = THREE.SRGBColorSpace; // encode sRGB into the read buffer
+  const prevTarget = renderer.getRenderTarget();
+  renderer.setRenderTarget(rt);
+  renderer.clear();
+  renderer.render(scene, cam);
+  const raw = new Uint8Array(px * px * 4);
+  renderer.readRenderTargetPixels(rt, 0, 0, px, px, raw);
+  renderer.setRenderTarget(prevTarget);
+
+  // Restore visibility + cleanup.
+  S.robotGroup.visible = robotVis;
+  S.obstaclesGroup.visible = obsVis;
+  S.pathGroup.visible = pathVis;
+  rt.dispose();
+
+  // Flip vertically: WebGL row 0 = bottom; PNG/canvas row 0 = top.
+  const out = new Uint8ClampedArray(px * px * 4);
+  const rowBytes = px * 4;
+  for (let y = 0; y < px; y++) {
+    const src = (px - 1 - y) * rowBytes;
+    out.set(raw.subarray(src, src + rowBytes), y * rowBytes);
+  }
+  return { raw: out, framed };
 }
 
 const RoomViewer = forwardRef<RoomViewerHandle, RoomViewerProps>(function RoomViewer(
@@ -426,69 +506,72 @@ const RoomViewer = forwardRef<RoomViewerHandle, RoomViewerProps>(function RoomVi
       },
 
       renderTopDown() {
-        const S = stateRef.current;
-        if (!S) return { imageDataUrl: '', bounds: { minX: 0, maxX: 0, minZ: 0, maxZ: 0 } };
-        const { renderer, scene, floorY, bounds } = S;
-
-        // Square frame covering the room + 5% margin (keeps the PNG undistorted).
-        const rawW = bounds.maxX - bounds.minX;
-        const rawD = bounds.maxZ - bounds.minZ;
-        const cx = (bounds.minX + bounds.maxX) / 2;
-        const cz = (bounds.minZ + bounds.maxZ) / 2;
-        const half = (Math.max(rawW, rawD, 0.001) * 1.05) / 2;
-        const framed: Bounds = {
-          minX: cx - half,
-          maxX: cx + half,
-          minZ: cz - half,
-          maxZ: cz + half,
-        };
-
-        // Top-down ortho camera. up=(0,0,-1) => screen-right maps to world +X and
-        // screen-down maps to world +Z, exactly what imageToWorld() assumes.
-        const cam = new THREE.OrthographicCamera(-half, half, half, -half, 0.01, 20000);
-        cam.up.set(0, 0, -1);
-        cam.position.set(cx, floorY + 1000, cz);
-        cam.lookAt(cx, floorY, cz);
-        cam.updateProjectionMatrix();
-
-        // Hide everything that isn't the room.
-        const robotVis = S.robotGroup.visible;
-        const obsVis = S.obstaclesGroup.visible;
-        const pathVis = S.pathGroup.visible;
-        S.robotGroup.visible = false;
-        S.obstaclesGroup.visible = false;
-        S.pathGroup.visible = false;
-
-        const rt = new THREE.WebGLRenderTarget(TOPDOWN_PX, TOPDOWN_PX);
-        rt.texture.colorSpace = THREE.SRGBColorSpace; // encode sRGB into the read buffer
-        const prevTarget = renderer.getRenderTarget();
-        renderer.setRenderTarget(rt);
-        renderer.clear();
-        renderer.render(scene, cam);
-        const raw = new Uint8Array(TOPDOWN_PX * TOPDOWN_PX * 4);
-        renderer.readRenderTargetPixels(rt, 0, 0, TOPDOWN_PX, TOPDOWN_PX, raw);
-        renderer.setRenderTarget(prevTarget);
-
-        // Restore visibility + cleanup.
-        S.robotGroup.visible = robotVis;
-        S.obstaclesGroup.visible = obsVis;
-        S.pathGroup.visible = pathVis;
-        rt.dispose();
-
-        // Flip vertically: WebGL row 0 = bottom; PNG/canvas row 0 = top.
-        const out = new Uint8ClampedArray(TOPDOWN_PX * TOPDOWN_PX * 4);
-        const rowBytes = TOPDOWN_PX * 4;
-        for (let y = 0; y < TOPDOWN_PX; y++) {
-          const src = (TOPDOWN_PX - 1 - y) * rowBytes;
-          out.set(raw.subarray(src, src + rowBytes), y * rowBytes);
-        }
+        const cap = captureTopDownRaw(stateRef.current, TOPDOWN_PX);
+        if (!cap) return { imageDataUrl: '', bounds: { minX: 0, maxX: 0, minZ: 0, maxZ: 0 } };
+        const { raw, framed } = cap;
         const canvas = document.createElement('canvas');
         canvas.width = TOPDOWN_PX;
         canvas.height = TOPDOWN_PX;
         const ctx = canvas.getContext('2d');
         if (!ctx) return { imageDataUrl: '', bounds: framed };
-        ctx.putImageData(new ImageData(out, TOPDOWN_PX, TOPDOWN_PX), 0, 0);
+        ctx.putImageData(new ImageData(new Uint8ClampedArray(raw), TOPDOWN_PX, TOPDOWN_PX), 0, 0);
         return { imageDataUrl: canvas.toDataURL('image/png'), bounds: framed };
+      },
+
+      renderTopDownTiles() {
+        const emptyBounds: Bounds = { minX: 0, maxX: 0, minZ: 0, maxZ: 0 };
+        // ONE high-res top-down render; the 5 outputs are pure 2D-canvas crops.
+        const cap = captureTopDownRaw(stateRef.current, TOPDOWN_HQ_PX);
+        if (!cap) return { bounds: emptyBounds, images: [] };
+        const { raw, framed } = cap;
+
+        // Offscreen source canvas holding the full high-res capture.
+        const source = document.createElement('canvas');
+        source.width = TOPDOWN_HQ_PX;
+        source.height = TOPDOWN_HQ_PX;
+        const sctx = source.getContext('2d');
+        if (!sctx) return { bounds: framed, images: [] };
+        sctx.putImageData(new ImageData(new Uint8ClampedArray(raw), TOPDOWN_HQ_PX, TOPDOWN_HQ_PX), 0, 0);
+
+        // Fractions of the framed square, x-right / z-down (imageToWorld convention).
+        // [0] = full frame (global context); [1..4] = 4 overlapping quadrants each
+        // spanning 60% per axis (20% overlap on shared edges), so an object near a
+        // tile boundary is captured whole in a neighbor rather than split by both.
+        const fracRects = [
+          { x0: 0, x1: 1, z0: 0, z1: 1 }, // full room
+          { x0: 0, x1: 0.6, z0: 0, z1: 0.6 }, // top-left
+          { x0: 0.4, x1: 1, z0: 0, z1: 0.6 }, // top-right
+          { x0: 0, x1: 0.6, z0: 0.4, z1: 1 }, // bottom-left
+          { x0: 0.4, x1: 1, z0: 0.4, z1: 1 }, // bottom-right
+        ];
+
+        const fw = framed.maxX - framed.minX;
+        const fd = framed.maxZ - framed.minZ;
+
+        const images = fracRects.map((r) => {
+          // World sub-rectangle for this tile (interpolate into framed).
+          const tileBounds: Bounds = {
+            minX: framed.minX + r.x0 * fw,
+            maxX: framed.minX + r.x1 * fw,
+            minZ: framed.minZ + r.z0 * fd,
+            maxZ: framed.minZ + r.z1 * fd,
+          };
+          // Source pixel rect, drawn (and upscaled for crops) onto a TOPDOWN_PX tile.
+          const sx = r.x0 * TOPDOWN_HQ_PX;
+          const sy = r.z0 * TOPDOWN_HQ_PX;
+          const sw = (r.x1 - r.x0) * TOPDOWN_HQ_PX;
+          const sh = (r.z1 - r.z0) * TOPDOWN_HQ_PX;
+
+          const canvas = document.createElement('canvas');
+          canvas.width = TOPDOWN_PX;
+          canvas.height = TOPDOWN_PX;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return { imageDataUrl: '', bounds: tileBounds };
+          ctx.drawImage(source, sx, sy, sw, sh, 0, 0, TOPDOWN_PX, TOPDOWN_PX);
+          return { imageDataUrl: canvas.toDataURL('image/png'), bounds: tileBounds };
+        });
+
+        return { bounds: framed, images };
       },
 
       getRoomRoot() {
