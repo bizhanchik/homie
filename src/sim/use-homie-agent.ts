@@ -421,22 +421,34 @@ export function useHomieAgent(opts?: {
         return true;
       };
 
-      return driver.drive(path, {
-        speed: 0.8,
-        validate,
-        onProgress: (pos) => {
-          const now = performance.now();
-          if (now - lastTrailUpdateRef.current > 80) {
-            currentTrailRef.current.push({ ...pos });
-            lastTrailUpdateRef.current = now;
-            // Throttle viewer updates to every 5 new points to avoid rebuilding
-            // geometry on every frame.
-            if (currentTrailRef.current.length % 5 === 0) {
-              viewerRef.current?.setTrail(currentTrailRef.current);
-            }
+      const progressFn = (pos: Vec2): void => {
+        const now = performance.now();
+        if (now - lastTrailUpdateRef.current > 80) {
+          currentTrailRef.current.push({ ...pos });
+          lastTrailUpdateRef.current = now;
+          if (currentTrailRef.current.length % 5 === 0) {
+            viewerRef.current?.setTrail(currentTrailRef.current);
           }
-        },
-      });
+        }
+      };
+
+      const result = await driver.drive(path, { speed: 0.8, validate, onProgress: progressFn });
+
+      // When blocked, back up so the robot visually retreats before replanning
+      // instead of freezing in place. Rotate 180° and reverse ~0.35 m.
+      if (result === 'blocked') {
+        const backHeading = driver.headingRad + Math.PI;
+        const backTarget = {
+          x: driver.position.x + Math.cos(backHeading) * 0.35,
+          z: driver.position.z + Math.sin(backHeading) * 0.35,
+        };
+        const freeBack = grid?.nearestFree(backTarget, 0.8) ?? backTarget;
+        v.setPath([freeBack]);
+        await driver.drive([freeBack], { speed: 1.2, onProgress: progressFn });
+        v.setPath([]);
+      }
+
+      return result;
     },
     [],
   );
