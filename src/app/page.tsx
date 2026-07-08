@@ -2,7 +2,6 @@
 
 import { useRouter } from 'next/navigation';
 import { nanoid } from 'nanoid';
-import { useRef, useState, useCallback } from 'react';
 
 const STEPS = [
   {
@@ -32,16 +31,6 @@ export default function Home() {
     router.push(`/s/${nanoid(8)}`);
   };
 
-  const robotRef = useRef<HTMLDivElement>(null);
-  const [spot, setSpot] = useState<{ x: number; y: number } | null>(null);
-
-  const onMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    const rect = robotRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    setSpot({ x: e.clientX - rect.left, y: e.clientY - rect.top });
-  }, []);
-
-  const onMouseLeave = useCallback(() => setSpot(null), []);
 
   return (
     <main
@@ -168,14 +157,8 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Right: robot image with cursor spotlight */}
-        <div
-          ref={robotRef}
-          className="hidden md:block shrink-0 relative"
-          style={{ width: '420px', cursor: 'crosshair' }}
-          onMouseMove={onMouseMove}
-          onMouseLeave={onMouseLeave}
-        >
+        {/* Right: robot image */}
+        <div className="hidden md:block shrink-0" style={{ width: '420px' }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="/robot-hero.png"
@@ -192,16 +175,6 @@ export default function Home() {
               display: 'block',
             }}
           />
-          {/* cursor spotlight — dark circle follows the mouse */}
-          {spot && (
-            <div
-              className="absolute inset-0 pointer-events-none"
-              style={{
-                background: `radial-gradient(circle 110px at ${spot.x}px ${spot.y}px, rgba(30,0,0,0.55) 0%, rgba(30,0,0,0.18) 55%, transparent 100%)`,
-                transition: 'background 0.04s linear',
-              }}
-            />
-          )}
         </div>
       </section>
 
