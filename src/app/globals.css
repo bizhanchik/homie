@@ -1,26 +1,114 @@
 @import "tailwindcss";
 
+/* ── CursorGothic font face ───────────────────────────────────────────── */
+@font-face {
+  font-family: 'CursorGothic';
+  src: url('/fonts/CursorGothic-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'CursorGothic';
+  src: url('/fonts/CursorGothic-Italic.woff2') format('woff2');
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'CursorGothic';
+  src: url('/fonts/CursorGothic-Bold.woff2') format('woff2');
+  font-weight: 600 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'CursorGothic';
+  src: url('/fonts/CursorGothic-BoldItalic.woff2') format('woff2');
+  font-weight: 600 700;
+  font-style: italic;
+  font-display: swap;
+}
+
+/* ── Cursor design tokens ─────────────────────────────────────────────── */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Brand */
+  --color-primary:        #f54e00;
+  --color-primary-active: #d04200;
+  --color-on-primary:     #ffffff;
+
+  /* Canvas / surface */
+  --color-canvas:         #f7f7f4;
+  --color-canvas-soft:    #fafaf7;
+  --color-surface-card:   #ffffff;
+  --color-surface-strong: #e6e5e0;
+
+  /* Hairlines */
+  --color-hairline:       #e6e5e0;
+  --color-hairline-soft:  #efeee8;
+  --color-hairline-strong:#cfcdc4;
+
+  /* Text */
+  --color-ink:            #26251e;
+  --color-body:           #5a5852;
+  --color-muted:          #807d72;
+  --color-muted-soft:     #a09c92;
+
+  /* AI timeline pastels */
+  --color-thinking:       #dfa88f;
+  --color-grep:           #9fc9a2;
+  --color-read:           #9fbbe0;
+  --color-edit:           #c0a8dd;
+  --color-done:           #c08532;
+
+  /* Semantic */
+  --color-success:        #1f8a65;
+  --color-error:          #cf2d56;
+
+  /* Spacing */
+  --space-xxs: 4px;
+  --space-xs:  8px;
+  --space-sm:  12px;
+  --space-base:16px;
+  --space-md:  20px;
+  --space-lg:  24px;
+  --space-xl:  32px;
+  --space-xxl: 48px;
+  --space-section: 80px;
+
+  /* Radius */
+  --radius-xs:  4px;
+  --radius-sm:  6px;
+  --radius-md:  8px;
+  --radius-lg:  12px;
+  --radius-xl:  16px;
+  --radius-pill:9999px;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
+/* ── Base ─────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: 'CursorGothic', system-ui, 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* studio/dark pages override back to dark */
+.dark-surface {
+  background: #09090b;
+  color: #f4f4f5;
+}
+
+code, pre, .font-mono {
+  font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }
