@@ -21,6 +21,7 @@ if (typeof globalThis.FileReader === 'undefined') {
         this.result = buf;
         this.onloadend?.();
       });
+            // asdasd
     }
     readAsDataURL(blob) {
       blob.arrayBuffer().then((buf) => {
