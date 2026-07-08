@@ -35,7 +35,7 @@ export default function VoiceButton({
       disabled={busy}
       title={
         on
-          ? 'Turn Homie's voice off'
+          ? "Turn Homie's voice off"
           : 'Let Homie speak its decisions out loud (and take voice commands)'
       }
       aria-pressed={on}
