@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { nanoid } from 'nanoid';
+import { useRef, useState, useCallback } from 'react';
 
 const STEPS = [
   {
@@ -30,6 +31,17 @@ export default function Home() {
   const openStudio = () => {
     router.push(`/s/${nanoid(8)}`);
   };
+
+  const robotRef = useRef<HTMLDivElement>(null);
+  const [spot, setSpot] = useState<{ x: number; y: number } | null>(null);
+
+  const onMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = robotRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setSpot({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+  }, []);
+
+  const onMouseLeave = useCallback(() => setSpot(null), []);
 
   return (
     <main
@@ -156,10 +168,13 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Right: robot image */}
+        {/* Right: robot image with cursor spotlight */}
         <div
-          className="hidden md:block shrink-0 relative group"
-          style={{ width: '420px' }}
+          ref={robotRef}
+          className="hidden md:block shrink-0 relative"
+          style={{ width: '420px', cursor: 'crosshair' }}
+          onMouseMove={onMouseMove}
+          onMouseLeave={onMouseLeave}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
@@ -174,19 +189,19 @@ export default function Home() {
               height: 'auto',
               pointerEvents: 'none',
               userSelect: 'none',
-              transition: 'filter 0.25s ease',
-            }}
-            className="group-hover:brightness-[0.65] group-hover:contrast-[1.4]"
-          />
-          {/* pixel dot overlay on hover */}
-          <div
-            className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-250 pointer-events-none"
-            style={{
-              backgroundImage: 'radial-gradient(circle, rgba(100,0,0,0.18) 1px, transparent 1px)',
-              backgroundSize: '5px 5px',
-              mixBlendMode: 'multiply',
+              display: 'block',
             }}
           />
+          {/* cursor spotlight — dark circle follows the mouse */}
+          {spot && (
+            <div
+              className="absolute inset-0 pointer-events-none"
+              style={{
+                background: `radial-gradient(circle 110px at ${spot.x}px ${spot.y}px, rgba(30,0,0,0.55) 0%, rgba(30,0,0,0.18) 55%, transparent 100%)`,
+                transition: 'background 0.04s linear',
+              }}
+            />
+          )}
         </div>
       </section>
 
