@@ -47,27 +47,29 @@ export default function Home() {
         >
           Homie
         </span>
-        <div className="flex items-center gap-6">
+        <button
+          type="button"
+          onClick={openStudio}
+          className="text-sm font-medium cursor-pointer group"
+          style={{
+            color: 'var(--color-primary)',
+            fontFamily: "'CursorGothic', sans-serif",
+            background: 'none',
+            border: 'none',
+            padding: 0,
+            position: 'relative',
+          }}
+        >
+          <span style={{ display: 'inline-block' }}>Try it →</span>
           <span
-            className="text-sm hidden sm:block"
-            style={{ color: 'var(--color-muted)', fontFamily: "'CursorGothic', sans-serif" }}
-          >
-            Cursor Physical AI Hackathon · Almaty 2026
-          </span>
-          <button
-            type="button"
-            onClick={openStudio}
-            className="text-sm font-medium transition-opacity hover:opacity-70 cursor-pointer"
+            className="absolute left-0 right-0 group-hover:opacity-100 group-active:opacity-100 opacity-0 transition-opacity duration-100"
             style={{
-              color: 'var(--color-primary)',
-              fontFamily: "'CursorGothic', sans-serif",
-              background: 'none',
-              border: 'none',
+              bottom: '-2px',
+              height: '1px',
+              background: 'var(--color-primary)',
             }}
-          >
-            Try it →
-          </button>
-        </div>
+          />
+        </button>
       </nav>
 
       {/* ── Hero ── */}
@@ -155,14 +157,35 @@ export default function Home() {
         </div>
 
         {/* Right: robot image */}
-        <div className="hidden md:flex shrink-0 items-center justify-center" style={{ width: '420px' }}>
+        <div
+          className="hidden md:block shrink-0 relative group"
+          style={{ width: '420px' }}
+        >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="/robot-hero.png"
             alt="Homie robot"
+            draggable={false}
             width={420}
             height={560}
-            style={{ objectFit: 'contain', width: '100%', height: 'auto' }}
+            style={{
+              objectFit: 'contain',
+              width: '100%',
+              height: 'auto',
+              pointerEvents: 'none',
+              userSelect: 'none',
+              transition: 'filter 0.25s ease',
+            }}
+            className="group-hover:brightness-[0.65] group-hover:contrast-[1.4]"
+          />
+          {/* pixel dot overlay on hover */}
+          <div
+            className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-250 pointer-events-none"
+            style={{
+              backgroundImage: 'radial-gradient(circle, rgba(100,0,0,0.18) 1px, transparent 1px)',
+              backgroundSize: '5px 5px',
+              mixBlendMode: 'multiply',
+            }}
           />
         </div>
       </section>
@@ -284,16 +307,47 @@ export default function Home() {
 
       {/* ── Footer ── */}
       <footer
-        className="border-t px-8 py-10 flex items-center justify-between flex-wrap gap-4"
-        style={{
-          borderColor: 'var(--color-hairline)',
-          fontFamily: "'CursorGothic', sans-serif",
-          fontSize: '13px',
-          color: 'var(--color-muted)',
-        }}
+        className="border-t"
+        style={{ borderColor: 'var(--color-hairline)' }}
       >
-        <span>Homie</span>
-        <span>Cursor Physical AI Hackathon · Almaty 2026</span>
+        {/* small top row */}
+        <div
+          className="px-8 pt-8 pb-6 flex items-center justify-between flex-wrap gap-4"
+          style={{
+            fontFamily: "'CursorGothic', sans-serif",
+            fontSize: '13px',
+            color: 'var(--color-muted)',
+          }}
+        >
+          <span>© 2026 Homie</span>
+          <span>© 2026</span>
+        </div>
+
+        {/* giant wordmark with bottom fade */}
+        <div
+          className="relative overflow-hidden select-none"
+          style={{ height: '22vw', minHeight: '120px' }}
+        >
+          <span
+            style={{
+              fontFamily: "'CursorGothic', sans-serif",
+              fontSize: '23vw',
+              fontWeight: 400,
+              letterSpacing: '-0.04em',
+              color: 'var(--color-hairline-strong)',
+              lineHeight: 1,
+              position: 'absolute',
+              bottom: '-0.12em',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              whiteSpace: 'nowrap',
+              WebkitMaskImage: 'linear-gradient(to bottom, black 0%, transparent 80%)',
+              maskImage: 'linear-gradient(to bottom, black 0%, transparent 80%)',
+            }}
+          >
+            Homie
+          </span>
+        </div>
       </footer>
     </main>
   );
