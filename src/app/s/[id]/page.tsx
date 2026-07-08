@@ -254,23 +254,23 @@ export default function StudioPage({
 
   return (
     <div
-      className=”flex h-screen flex-col”
-      style={{ background: 'var(--color-canvas)', color: 'var(--color-ink)', fontFamily: “'CursorGothic', sans-serif” }}
+      className="flex h-screen flex-col"
+      style={{ background: 'var(--color-canvas)', color: 'var(--color-ink)', fontFamily: "'CursorGothic', sans-serif" }}
     >
       {/* ---- Header ---- */}
       <header
-        className=”flex h-14 shrink-0 items-center justify-between px-4”
+        className="flex h-14 shrink-0 items-center justify-between px-4"
         style={{ borderBottom: '1px solid var(--color-hairline)', background: 'var(--color-canvas)' }}
       >
-        <div className=”flex items-center gap-3”>
+        <div className="flex items-center gap-3">
           <span
-            className=”text-lg font-semibold tracking-tight”
-            style={{ color: 'var(--color-ink)', fontFamily: “'CursorGothic', sans-serif” }}
+            className="text-lg font-semibold tracking-tight"
+            style={{ color: 'var(--color-ink)', fontFamily: "'CursorGothic', sans-serif" }}
           >
             Homie
           </span>
           <span
-            className=”rounded-full px-2.5 py-0.5 font-mono text-[11px]”
+            className="rounded-full px-2.5 py-0.5 font-mono text-[11px]"
             style={{
               border: '1px solid var(--color-hairline)',
               background: 'var(--color-surface-card)',
@@ -280,16 +280,16 @@ export default function StudioPage({
             {sessionId}
           </span>
         </div>
-        <div className=”flex items-center gap-2”>
+        <div className="flex items-center gap-2">
           <VoiceButton state={voiceState} onToggle={toggleVoice} />
           <button
-            type=”button”
+            type="button"
             onClick={() => setOrderOpen(true)}
-            className=”rounded-full px-4 py-1.5 text-sm font-semibold transition hover:opacity-90 cursor-pointer”
+            className="rounded-full px-4 py-1.5 text-sm font-semibold transition hover:opacity-90 cursor-pointer"
             style={{
               background: 'var(--color-primary)',
               color: '#fff',
-              fontFamily: “'CursorGothic', sans-serif”,
+              fontFamily: "'CursorGothic', sans-serif",
               border: 'none',
             }}
           >
@@ -299,12 +299,12 @@ export default function StudioPage({
       </header>
 
       {/* ---- Main: viewer + sidebar ---- */}
-      <div className=”flex min-h-0 flex-1”>
+      <div className="flex min-h-0 flex-1">
         {/* Viewer area */}
         <main className={`relative min-h-0 flex-1 ${obstacleMode ? 'cursor-crosshair' : ''}`}>
           <RoomViewer
             ref={viewerRef}
-            className=”h-full w-full”
+            className="h-full w-full"
             onReady={onReady}
             obstacleMode={obstacleMode}
             onObstacleAdded={onObstacleAdded}
@@ -312,25 +312,25 @@ export default function StudioPage({
 
           {/* Toolbar (top-left) */}
           {roomLoaded && (
-            <div className=”pointer-events-none absolute left-3 top-3 flex flex-col gap-2”>
+            <div className="pointer-events-none absolute left-3 top-3 flex flex-col gap-2">
               <button
-                type=”button”
+                type="button"
                 onClick={() => setObstacleMode((m) => !m)}
-                className=”pointer-events-auto flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-medium backdrop-blur transition cursor-pointer”
+                className="pointer-events-auto flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-medium backdrop-blur transition cursor-pointer"
                 style={{
                   border: obstacleMode ? '1px solid rgba(239,68,68,0.6)' : '1px solid var(--color-hairline-strong)',
                   background: obstacleMode ? 'rgba(239,68,68,0.08)' : 'rgba(247,247,244,0.88)',
                   color: obstacleMode ? '#dc2626' : 'var(--color-ink)',
-                  fontFamily: “'CursorGothic', sans-serif”,
+                  fontFamily: "'CursorGothic', sans-serif",
                 }}
               >
-                <span className=”text-sm”>⛔</span>
+                <span className="text-sm">⛔</span>
                 {obstacleMode ? 'Click floor to drop' : 'Drop obstacle'}
               </button>
               {obstacleMode && (
                 <span
-                  className=”pointer-events-none max-w-[12rem] rounded-lg px-3 py-1.5 text-[11px] backdrop-blur”
-                  style={{ background: 'rgba(247,247,244,0.88)', color: 'var(--color-muted)', fontFamily: “'CursorGothic', sans-serif” }}
+                  className="pointer-events-none max-w-[12rem] rounded-lg px-3 py-1.5 text-[11px] backdrop-blur"
+                  style={{ background: 'rgba(247,247,244,0.88)', color: 'var(--color-muted)', fontFamily: "'CursorGothic', sans-serif" }}
                 >
                   Click anywhere on the floor to place an obstacle in Homie&apos;s path.
                 </span>
@@ -340,14 +340,14 @@ export default function StudioPage({
 
           {/* State ribbon (top-center) */}
           {roomLoaded && stateLabel && (
-            <div className=”pointer-events-none absolute left-1/2 top-3 flex -translate-x-1/2 flex-col items-center gap-1”>
+            <div className="pointer-events-none absolute left-1/2 top-3 flex -translate-x-1/2 flex-col items-center gap-1">
               <div
-                className=”flex items-center gap-2 rounded-full px-3.5 py-1.5 text-sm backdrop-blur”
+                className="flex items-center gap-2 rounded-full px-3.5 py-1.5 text-sm backdrop-blur"
                 style={{
                   border: '1px solid var(--color-hairline-strong)',
                   background: 'rgba(247,247,244,0.90)',
                   color: 'var(--color-ink)',
-                  fontFamily: “'CursorGothic', sans-serif”,
+                  fontFamily: "'CursorGothic', sans-serif",
                 }}
               >
                 <span
@@ -358,8 +358,8 @@ export default function StudioPage({
               </div>
               {latestNarration && (
                 <div
-                  className=”max-w-xs truncate rounded-full px-3 py-1 text-xs backdrop-blur”
-                  style={{ background: 'rgba(247,247,244,0.80)', color: 'var(--color-muted)', fontFamily: “'CursorGothic', sans-serif” }}
+                  className="max-w-xs truncate rounded-full px-3 py-1 text-xs backdrop-blur"
+                  style={{ background: 'rgba(247,247,244,0.80)', color: 'var(--color-muted)', fontFamily: "'CursorGothic', sans-serif" }}
                 >
                   &quot;{latestNarration}&quot;
                 </div>
@@ -370,8 +370,8 @@ export default function StudioPage({
           {/* Error toast */}
           {error && (
             <div
-              className=”absolute bottom-4 left-1/2 z-20 -translate-x-1/2 rounded-lg px-4 py-2 text-sm shadow-lg backdrop-blur”
-              style={{ border: '1px solid rgba(239,68,68,0.4)', background: 'rgba(255,245,245,0.92)', color: '#dc2626', fontFamily: “'CursorGothic', sans-serif” }}
+              className="absolute bottom-4 left-1/2 z-20 -translate-x-1/2 rounded-lg px-4 py-2 text-sm shadow-lg backdrop-blur"
+              style={{ border: '1px solid rgba(239,68,68,0.4)', background: 'rgba(255,245,245,0.92)', color: '#dc2626', fontFamily: "'CursorGothic', sans-serif" }}
             >
               {error}
             </div>
@@ -380,63 +380,63 @@ export default function StudioPage({
           {/* Empty state overlay */}
           {showEmpty && (
             <div
-              className=”absolute inset-0 z-30 flex items-center justify-center backdrop-blur-sm”
+              className="absolute inset-0 z-30 flex items-center justify-center backdrop-blur-sm"
               style={{ background: 'rgba(247,247,244,0.75)' }}
             >
               {loadingRoom ? (
-                <div className=”flex flex-col items-center gap-3” style={{ color: 'var(--color-muted)', fontFamily: “'CursorGothic', sans-serif” }}>
+                <div className="flex flex-col items-center gap-3" style={{ color: 'var(--color-muted)', fontFamily: "'CursorGothic', sans-serif" }}>
                   <span
-                    className=”h-8 w-8 animate-spin rounded-full border-2”
+                    className="h-8 w-8 animate-spin rounded-full border-2"
                     style={{ borderColor: 'var(--color-hairline-strong)', borderTopColor: 'var(--color-primary)' }}
                   />
-                  <span className=”text-sm”>Loading your room…</span>
+                  <span className="text-sm">Loading your room…</span>
                 </div>
               ) : (
                 <div
-                  className=”flex w-full max-w-sm flex-col items-center rounded-2xl p-8”
+                  className="flex w-full max-w-sm flex-col items-center rounded-2xl p-8"
                   style={{ border: '1px solid var(--color-hairline)', background: 'var(--color-surface-card)', boxShadow: '0 4px 24px rgba(38,37,30,0.08)' }}
                 >
                   <h2
-                    className=”mb-1 text-lg font-semibold”
-                    style={{ color: 'var(--color-ink)', fontFamily: “'CursorGothic', sans-serif” }}
+                    className="mb-1 text-lg font-semibold"
+                    style={{ color: 'var(--color-ink)', fontFamily: "'CursorGothic', sans-serif" }}
                   >
                     Bring in your room
                   </h2>
-                  <p className=”mb-6 text-center text-sm” style={{ color: 'var(--color-muted)', fontFamily: “'CursorGothic', sans-serif” }}>
+                  <p className="mb-6 text-center text-sm" style={{ color: 'var(--color-muted)', fontFamily: "'CursorGothic', sans-serif" }}>
                     Upload the .glb you scanned with your iPhone.
                   </p>
 
                   <input
                     ref={fileInputRef}
-                    type=”file”
-                    accept=”.glb,model/gltf-binary”
-                    className=”sr-only”
+                    type="file"
+                    accept=".glb,model/gltf-binary"
+                    className="sr-only"
                     onChange={onFileChosen}
                   />
                   <button
-                    type=”button”
+                    type="button"
                     onClick={pickFile}
-                    className=”w-full rounded-xl py-3 text-sm font-semibold transition hover:opacity-90 cursor-pointer”
-                    style={{ background: 'var(--color-ink)', color: 'var(--color-canvas)', fontFamily: “'CursorGothic', sans-serif”, border: 'none' }}
+                    className="w-full rounded-xl py-3 text-sm font-semibold transition hover:opacity-90 cursor-pointer"
+                    style={{ background: 'var(--color-ink)', color: 'var(--color-canvas)', fontFamily: "'CursorGothic', sans-serif", border: 'none' }}
                   >
                     Upload room scan (.glb)
                   </button>
 
-                  <div className=”my-6 flex w-full items-center gap-3 text-xs” style={{ color: 'var(--color-muted-soft)', fontFamily: “'CursorGothic', sans-serif” }}>
-                    <span className=”h-px flex-1” style={{ background: 'var(--color-hairline)' }} />
+                  <div className="my-6 flex w-full items-center gap-3 text-xs" style={{ color: 'var(--color-muted-soft)', fontFamily: "'CursorGothic', sans-serif" }}>
+                    <span className="h-px flex-1" style={{ background: 'var(--color-hairline)' }} />
                     or
-                    <span className=”h-px flex-1” style={{ background: 'var(--color-hairline)' }} />
+                    <span className="h-px flex-1" style={{ background: 'var(--color-hairline)' }} />
                   </div>
 
                   <button
-                    type=”button”
+                    type="button"
                     onClick={loadSample}
-                    className=”w-full rounded-xl py-2.5 text-sm font-medium transition hover:opacity-70 cursor-pointer”
-                    style={{ border: '1px solid var(--color-hairline-strong)', background: 'var(--color-canvas)', color: 'var(--color-ink)', fontFamily: “'CursorGothic', sans-serif” }}
+                    className="w-full rounded-xl py-2.5 text-sm font-medium transition hover:opacity-70 cursor-pointer"
+                    style={{ border: '1px solid var(--color-hairline-strong)', background: 'var(--color-canvas)', color: 'var(--color-ink)', fontFamily: "'CursorGothic', sans-serif" }}
                   >
                     Load sample room
                   </button>
-                  <p className=”mt-3 text-center text-xs” style={{ color: 'var(--color-muted-soft)', fontFamily: “'CursorGothic', sans-serif” }}>
+                  <p className="mt-3 text-center text-xs" style={{ color: 'var(--color-muted-soft)', fontFamily: "'CursorGothic', sans-serif" }}>
                     …or drag a .glb file anywhere onto this window.
                   </p>
                 </div>
@@ -447,11 +447,11 @@ export default function StudioPage({
 
         {/* Sidebar */}
         <aside
-          className=”flex w-80 shrink-0 flex-col”
+          className="flex w-80 shrink-0 flex-col"
           style={{ borderLeft: '1px solid var(--color-hairline)', background: 'var(--color-canvas)' }}
         >
           <LabelsPanel scene={agent.scene} />
-          <div className=”min-h-0 flex-1”>
+          <div className="min-h-0 flex-1">
             <PlanPanel plan={agent.plan} currentStepIndex={agent.currentStepIndex} />
           </div>
         </aside>
@@ -474,12 +474,12 @@ export default function StudioPage({
       {/* ---- Full-window drag highlight ---- */}
       {dragging && (
         <div
-          className=”pointer-events-none fixed inset-0 z-40 flex items-center justify-center”
+          className="pointer-events-none fixed inset-0 z-40 flex items-center justify-center"
           style={{ border: '3px dashed var(--color-primary)', background: 'rgba(245,78,0,0.05)' }}
         >
           <span
-            className=”rounded-xl px-6 py-3 text-lg font-medium”
-            style={{ background: 'var(--color-surface-card)', color: 'var(--color-ink)', fontFamily: “'CursorGothic', sans-serif”, border: '1px solid var(--color-hairline)' }}
+            className="rounded-xl px-6 py-3 text-lg font-medium"
+            style={{ background: 'var(--color-surface-card)', color: 'var(--color-ink)', fontFamily: "'CursorGothic', sans-serif", border: '1px solid var(--color-hairline)' }}
           >
             Drop your .glb to load the room
           </span>
