@@ -1,8 +1,5 @@
 'use client';
 
-// Bottom bar of the studio: type (or tap an example of) what Homie should do,
-// then Execute. Owns only its own input text; running is the page's concern.
-
 import { useEffect, useState } from 'react';
 
 const EXAMPLES = [
@@ -11,9 +8,6 @@ const EXAMPLES = [
   'Go wait by the sofa',
 ];
 
-// Optional voice-mic control, prop-drilled from the studio page. `connected`
-// gates the button's appearance (only once the narrator is live/fallback);
-// `supported` false -> shown disabled with a "needs Chrome" tooltip.
 export type MicState = {
   connected: boolean;
   enabled: boolean;
@@ -32,12 +26,10 @@ export default function TaskBar({
   disabled: boolean;
   busy: boolean;
   mic?: MicState;
-  // A spoken command echoed into the input so the user sees what Homie heard.
   injectedTask?: { text: string; nonce: number } | null;
 }) {
   const [value, setValue] = useState('');
 
-  // Reflect a voice command into the input (the page also auto-runs it).
   useEffect(() => {
     if (injectedTask && injectedTask.text) setValue(injectedTask.text);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -51,7 +43,13 @@ export default function TaskBar({
   };
 
   return (
-    <div className="shrink-0 border-t border-neutral-800 bg-neutral-950/95 px-4 py-3">
+    <div
+      className="shrink-0 px-4 py-3"
+      style={{
+        borderTop: '1px solid var(--color-hairline)',
+        background: 'var(--color-canvas)',
+      }}
+    >
       <div className="mb-2 flex flex-wrap gap-2">
         {EXAMPLES.map((ex) => (
           <button
@@ -59,7 +57,13 @@ export default function TaskBar({
             type="button"
             disabled={disabled}
             onClick={() => setValue(ex)}
-            className="rounded-full border border-neutral-800 bg-neutral-900 px-3 py-1 text-xs text-neutral-400 transition hover:border-emerald-500/60 hover:text-emerald-300 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-neutral-800 disabled:hover:text-neutral-400"
+            className="rounded-full px-3 py-1 text-xs transition cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
+            style={{
+              border: '1px solid var(--color-hairline-strong)',
+              background: 'var(--color-surface-card)',
+              color: 'var(--color-muted)',
+              fontFamily: "'CursorGothic', sans-serif",
+            }}
           >
             {ex}
           </button>
@@ -67,7 +71,6 @@ export default function TaskBar({
       </div>
 
       <div className="flex items-center gap-2">
-        {/* mic-slot */}
         {mic?.connected && (
           <button
             type="button"
@@ -78,18 +81,19 @@ export default function TaskBar({
               !mic.supported
                 ? 'Voice input needs Chrome'
                 : mic.enabled
-                  ? 'Listening — tap to stop (push-to-talk for the demo)'
+                  ? 'Listening — tap to stop'
                   : 'Tap to speak a command'
             }
-            className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border text-lg transition disabled:cursor-not-allowed disabled:opacity-40 ${
-              mic.enabled
-                ? 'border-emerald-500/70 bg-emerald-500/15 text-emerald-300'
-                : 'border-neutral-800 bg-neutral-900 text-neutral-400 hover:border-neutral-600'
-            }`}
+            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-lg transition disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
+            style={{
+              border: mic.enabled
+                ? '1px solid var(--color-primary)'
+                : '1px solid var(--color-hairline-strong)',
+              background: mic.enabled ? 'rgba(245,78,0,0.08)' : 'var(--color-surface-card)',
+              color: mic.enabled ? 'var(--color-primary)' : 'var(--color-muted)',
+            }}
           >
-            <span aria-hidden className={mic.enabled ? 'animate-pulse' : ''}>
-              🎤
-            </span>
+            <span aria-hidden className={mic.enabled ? 'animate-pulse' : ''}>🎤</span>
           </button>
         )}
         <input
@@ -97,24 +101,31 @@ export default function TaskBar({
           aria-label="Task for Homie"
           value={value}
           onChange={(e) => setValue(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') run();
-          }}
+          onKeyDown={(e) => { if (e.key === 'Enter') run(); }}
           disabled={disabled}
           placeholder="Tell Homie what to do…"
-          className="min-w-0 flex-1 rounded-xl border border-neutral-800 bg-neutral-900 px-4 py-2.5 text-sm text-neutral-100 placeholder:text-neutral-600 outline-none transition focus:border-emerald-500/70 disabled:cursor-not-allowed disabled:opacity-50"
+          className="min-w-0 flex-1 rounded-xl px-4 py-2.5 text-sm outline-none transition disabled:cursor-not-allowed disabled:opacity-50"
+          style={{
+            border: '1px solid var(--color-hairline-strong)',
+            background: 'var(--color-surface-card)',
+            color: 'var(--color-ink)',
+            fontFamily: "'CursorGothic', sans-serif",
+          }}
         />
         <button
           type="button"
           onClick={run}
           disabled={!canRun}
-          className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-neutral-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-neutral-800 disabled:text-neutral-500"
+          className="inline-flex shrink-0 items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-medium transition cursor-pointer disabled:cursor-not-allowed"
+          style={{
+            background: canRun ? 'var(--color-ink)' : 'var(--color-surface-strong)',
+            color: canRun ? 'var(--color-canvas)' : 'var(--color-muted)',
+            fontFamily: "'CursorGothic', sans-serif",
+            border: 'none',
+          }}
         >
           {busy && (
-            <span
-              className="h-4 w-4 animate-spin rounded-full border-2 border-neutral-950/40 border-t-neutral-950"
-              aria-hidden
-            />
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-current/30 border-t-current" aria-hidden />
           )}
           {busy ? 'Running…' : 'Execute'}
         </button>

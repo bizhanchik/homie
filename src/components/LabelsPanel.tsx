@@ -1,9 +1,5 @@
 'use client';
 
-// Right-sidebar panel: the objects Homie recognised in the scanned room. Shows
-// a shimmer skeleton while the scene is still being understood (scene === null),
-// then a tidy list once /api/label has resolved into a SceneModel.
-
 import type { SceneModel, SceneObject } from '@/lib/types';
 
 function emojiFor(o: SceneObject): string {
@@ -28,13 +24,22 @@ function fmt(n: number): string {
 
 export default function LabelsPanel({ scene }: { scene: SceneModel | null }) {
   return (
-    <section className="shrink-0 border-b border-neutral-800 p-4">
+    <section
+      className="shrink-0 p-4"
+      style={{ borderBottom: '1px solid var(--color-hairline)' }}
+    >
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-xs font-semibold uppercase tracking-wider text-neutral-400">
+        <h2
+          className="text-xs font-semibold uppercase tracking-wider"
+          style={{ color: 'var(--color-muted)', fontFamily: "'CursorGothic', sans-serif", letterSpacing: '0.88px' }}
+        >
           In this room
         </h2>
         {scene && (
-          <span className="rounded-full bg-neutral-800 px-2 py-0.5 text-[11px] font-medium text-neutral-300">
+          <span
+            className="rounded-full px-2 py-0.5 text-[11px] font-medium"
+            style={{ background: 'var(--color-surface-strong)', color: 'var(--color-ink)', fontFamily: "'CursorGothic', sans-serif" }}
+          >
             {scene.objects.length}
           </span>
         )}
@@ -45,31 +50,41 @@ export default function LabelsPanel({ scene }: { scene: SceneModel | null }) {
           {[0, 1, 2, 3].map((i) => (
             <li
               key={i}
-              className="flex items-center gap-3 rounded-lg border border-neutral-800/60 bg-neutral-900/40 px-3 py-2"
+              className="flex items-center gap-3 rounded-lg px-3 py-2"
+              style={{ border: '1px solid var(--color-hairline)', background: 'var(--color-surface-card)' }}
             >
-              <span className="h-6 w-6 shrink-0 animate-pulse rounded-md bg-neutral-800" />
+              <span className="h-6 w-6 shrink-0 animate-pulse rounded-md" style={{ background: 'var(--color-surface-strong)' }} />
               <span className="flex-1 space-y-1.5">
-                <span className="block h-2.5 w-24 animate-pulse rounded bg-neutral-800" />
-                <span className="block h-2 w-16 animate-pulse rounded bg-neutral-800/70" />
+                <span className="block h-2.5 w-24 animate-pulse rounded" style={{ background: 'var(--color-surface-strong)' }} />
+                <span className="block h-2 w-16 animate-pulse rounded" style={{ background: 'var(--color-hairline-strong)' }} />
               </span>
             </li>
           ))}
         </ul>
       ) : scene.objects.length === 0 ? (
-        <p className="text-sm text-neutral-500">No objects detected yet.</p>
+        <p className="text-sm" style={{ color: 'var(--color-muted-soft)', fontFamily: "'CursorGothic', sans-serif" }}>
+          No objects detected yet.
+        </p>
       ) : (
         <ul className="max-h-56 space-y-2 overflow-y-auto pr-1">
           {scene.objects.map((o) => (
             <li
               key={o.id}
-              className="flex items-center gap-3 rounded-lg border border-neutral-800 bg-neutral-900/60 px-3 py-2"
+              className="flex items-center gap-3 rounded-lg px-3 py-2"
+              style={{ border: '1px solid var(--color-hairline)', background: 'var(--color-surface-card)' }}
             >
               <span className="text-lg leading-none">{emojiFor(o)}</span>
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-medium capitalize text-neutral-100">
+                <span
+                  className="block truncate text-sm font-medium capitalize"
+                  style={{ color: 'var(--color-ink)', fontFamily: "'CursorGothic', sans-serif" }}
+                >
                   {o.name}
                 </span>
-                <span className="block font-mono text-[11px] text-neutral-500">
+                <span
+                  className="block font-mono text-[11px]"
+                  style={{ color: 'var(--color-muted)' }}
+                >
                   {fmt(o.position.x)}, {fmt(o.position.z)} m
                 </span>
               </span>
