@@ -311,6 +311,45 @@ export function useHomieAgent(opts?: {
   );
 
   // --- step execution ------------------------------------------------------
+
+  // BFS from `from` through free cells; returns a path to the reachable cell
+  // that is closest (in world distance) to `target`. Capped at 4000 cells so
+  // it stays under 1ms even on a dense Scaniverse grid. Returns null only if
+  // the robot's start position itself is in a blocked cell.
+  function bestEffortPath(grid: OccupancyGrid, from: Vec2, target: Vec2): Vec2[] | null {
+    const { c: fc, r: fr } = grid.worldToCell(from);
+    if (grid.blocked[fr * grid.cols + fc]) return null;
+
+    const { c: tc, r: tr } = grid.worldToCell(target);
+    const visited = new Uint8Array(grid.cols * grid.rows);
+    const queue: [number, number][] = [[fc, fr]];
+    visited[fr * grid.cols + fc] = 1;
+
+    let bestC = fc, bestR = fr;
+    let bestDist = Math.hypot(fc - tc, fr - tr);
+    let explored = 0;
+
+    while (queue.length > 0 && explored < 4000) {
+      const [c, r] = queue.shift()!;
+      explored++;
+      const d = Math.hypot(c - tc, r - tr);
+      if (d < bestDist) { bestDist = d; bestC = c; bestR = r; }
+      if (bestDist < 2) break; // close enough, stop early
+
+      for (const [dc, dr] of [[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[-1,1],[1,-1],[1,1]]) {
+        const nc = c + dc, nr = r + dr;
+        if (nc < 0 || nr < 0 || nc >= grid.cols || nr >= grid.rows) continue;
+        const idx = nr * grid.cols + nc;
+        if (visited[idx] || grid.blocked[idx]) continue;
+        visited[idx] = 1;
+        queue.push([nc, nr]);
+      }
+    }
+
+    const closest = grid.cellToWorld(bestC, bestR);
+    return findPath(grid, from, closest) ?? [from, closest];
+  }
+
   const execMoveStep = useCallback(
     async (step: PlanStep): Promise<DriveResultLike> => {
       const v = viewerRef.current;
@@ -321,20 +360,25 @@ export function useHomieAgent(opts?: {
       const from = driver.position;
       let path: Vec2[];
       if (grid) {
-        // Stop as close as physically possible — try a tight 0.45 m radius
-        // first (just clears the obstacle dilation), then fall back to wider
-        // radii only if the nearest cell there is still blocked.
-        const target =
-          grid.nearestFree(step.waypoint, 0.45) ??
-          grid.nearestFree(step.waypoint, 0.8) ??
-          grid.nearestFree(step.waypoint, 1.4) ??
-          step.waypoint;
-        const routed = findPath(grid, from, target);
+        // Try increasingly wide approach radii around the target. Furniture
+        // stamps + robot dilation can block the exact waypoint, so we search
+        // outward until A* finds a connected route.
+        let routed: Vec2[] | null = null;
+        for (const r of [0.45, 0.8, 1.4, 2.5, 4.0]) {
+          const candidate = grid.nearestFree(step.waypoint, r);
+          if (candidate) {
+            routed = findPath(grid, from, candidate);
+            if (routed) break;
+          }
+        }
         if (!routed) {
-          // Target is walled off (e.g. an obstacle's dilation swallowed the
-          // waypoint). Driving a straight line into it just re-blocks every
-          // tick and loops the replan. Skip this leg best-effort so the run
-          // keeps making forward progress instead of dead-ending.
+          // All radii failed — find the closest cell that IS reachable from
+          // the robot's position (BFS, capped at 4000 cells ≈ full room) and
+          // drive as close as we can get.
+          routed = bestEffortPath(grid, from, step.waypoint);
+        }
+        if (!routed) {
+          narrate(`Can't reach that position — moving on`);
           v.setPath([]);
           return 'arrived';
         }
