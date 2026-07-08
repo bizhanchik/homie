@@ -243,6 +243,15 @@ export default function StudioPage({
     });
   }, []);
 
+  const [visionMode, setVisionMode] = useState<'gpt4o' | 'sam2'>('gpt4o');
+  const toggleVisionMode = useCallback(() => {
+    setVisionMode((prev) => {
+      const next = prev === 'gpt4o' ? 'sam2' : 'gpt4o';
+      agentRef.current.setVisionMode(next);
+      return next;
+    });
+  }, []);
+
   const stateLabel = STATE_LABEL[agent.state];
   const busy = BUSY_STATES.includes(agent.state);
   const latestNarration =
@@ -287,6 +296,20 @@ export default function StudioPage({
           </span>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={toggleVisionMode}
+            title={visionMode === 'gpt4o' ? 'Switch to SAM2 (open source)' : 'Switch to GPT-4o'}
+            className="rounded-full px-3 py-1 text-[11px] font-semibold transition cursor-pointer"
+            style={{
+              border: '1px solid var(--color-hairline-strong)',
+              background: visionMode === 'sam2' ? 'var(--color-primary)' : 'var(--color-surface-card)',
+              color: visionMode === 'sam2' ? '#fff' : 'var(--color-muted)',
+              fontFamily: "'CursorGothic', sans-serif",
+            }}
+          >
+            {visionMode === 'sam2' ? 'SAM2' : 'GPT-4o'}
+          </button>
           <VoiceButton state={voiceState} onToggle={toggleVoice} />
           <button
             type="button"

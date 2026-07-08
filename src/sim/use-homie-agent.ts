@@ -48,6 +48,7 @@ export type AgentAPI = {
    * used by the Studio UI; safe to ignore.
    */
   setDebugFailReplan(on: boolean): void;
+  setVisionMode(mode: 'gpt4o' | 'sam2'): void;
 };
 
 type AgentReducerState = {
@@ -182,6 +183,7 @@ export function useHomieAgent(opts?: {
   // Debug-only (harness): when true, the replan API path is short-circuited to a
   // failure so the pure-A* local fallback is exercised. Never toggled in prod.
   const debugFailReplanRef = useRef<boolean>(false);
+  const labelEndpointRef = useRef<string>('/api/label');
   const onNarrationRef = useRef(opts?.onNarration);
   onNarrationRef.current = opts?.onNarration;
 
@@ -249,7 +251,7 @@ export function useHomieAgent(opts?: {
         // pass. `bounds` (== td.bounds, what the grid was built from) is the outer
         // frame; each image carries its own sub-rect bounds for world conversion.
         const tiles = v.renderTopDownTiles();
-        const res = await fetch('/api/label', {
+        const res = await fetch(labelEndpointRef.current, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ bounds, images: tiles.images }),
@@ -721,6 +723,10 @@ export function useHomieAgent(opts?: {
     debugFailReplanRef.current = on;
   }, []);
 
+  const setVisionMode = useCallback((mode: 'gpt4o' | 'sam2') => {
+    labelEndpointRef.current = mode === 'sam2' ? '/api/label-sam' : '/api/label';
+  }, []);
+
   // --- reset ---------------------------------------------------------------
   const reset = useCallback(() => {
     // Invalidate any in-flight run (its cancelled() flips true) AND stop the
@@ -766,6 +772,7 @@ export function useHomieAgent(opts?: {
     removeObstacle,
     reset,
     setDebugFailReplan,
+    setVisionMode,
   };
 }
 
